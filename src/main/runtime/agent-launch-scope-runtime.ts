@@ -99,15 +99,7 @@ export function resolveAgentLaunchRuntime(
   }
   return {
     platform: executionRuntimePlatform(projectRuntime, scope.path, process.platform),
-    pty: resolveLocalPtyOptions(
-      store.getSettings(),
-      projectRuntime,
-      // The window's rule: with no runtime, a `\\wsl$` path opens in WSL.
-      requestedShellOverride ??
-        (wslShellRule === 'window' && !projectRuntime && isWslUncPath(scope.path)
-          ? 'wsl.exe'
-          : undefined)
-    )
+    pty: resolveLocalPtyOptions(store.getSettings(), projectRuntime, requestedShellOverride)
   }
 }
 

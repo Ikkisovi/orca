@@ -42,6 +42,7 @@ import { TERMINAL_LIFECYCLE_METHODS } from '../runtime/rpc/methods/terminal/term
 import { AGENT_SESSION_METHODS } from '../runtime/rpc/methods/agent-session'
 import { AGENT_LAUNCH_METHODS } from '../runtime/rpc/methods/agent-launch'
 import { openTestAgentSessionRecordStore } from '../runtime/agent-session-record-store-test-harness'
+import { isWslUncPath } from '../../shared/wsl-paths'
 import { agentLaunchOperationCallerKey } from '../runtime/rpc/methods/agent-launch-replay'
 import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
 import {
@@ -332,9 +333,12 @@ describe('pane-trigger lane: window launch -> host plan -> pane spawn -> provide
         telemetry: undefined
       })
 
-      expect(await providerFacts(lanes.provider)).toEqual(
-        expectedWindowProvider(request, c.provider, c.request.agentEnv ?? {})
-      )
+      const facts = await providerFacts(lanes.provider)
+      // Both real providers run a `\\wsl$` cwd in wsl.exe whatever shell is asked for
+      // (local-pty-launch-plan.ts, daemon shell-launch-plan.ts); this provider only records.
+      expect(
+        isWslUncPath(String(request.cwd)) ? { ...facts, shellOverride: 'wsl.exe' } : facts
+      ).toEqual(expectedWindowProvider(request, c.provider, c.request.agentEnv ?? {}))
       expect(trackMock.mock.calls).toEqual([['agent_started', request.telemetry]])
     }
   )
