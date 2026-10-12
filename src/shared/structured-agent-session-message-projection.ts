@@ -178,17 +178,21 @@ export function projectStructuredAgentSessionMessages(
   if (shownStopped.size > 0) {
     moved = keepStoppedSendsInSendOrder(delivered, stoppedBeforeStart, shownStopped) || moved
   }
-  const conversation = moved
+  const ordered = moved
     ? Array.from(collapseProviderRetryRuns(delivered)).sort(compareNativeChatTranscriptMessages)
     : collapseProviderRetryRuns(delivered)
+  const conversation =
+    shownStopped.size > 0 ? withStopRowsAfterStoppedSends(ordered, shownStopped) : ordered
   return [
-    // After the held sends leave: they are drawn after the conversation, never inside a run.
-    ...(shownStopped.size > 0
-      ? withStopRowsAfterStoppedSends(conversation, shownStopped)
+    // In no turn; merged at their journal places, after the stop rows so none splits a run.
+    ...(unsentItems.length > 0
+      ? withRowsAtJournalPlaces(
+          conversation,
+          projectItems(unsentItems).map((message) => ({ ...message, unsent: true as const }))
+        )
       : conversation),
+    // After the held sends leave: they are drawn after the conversation, never inside a run.
     ...held,
-    // In no turn; the journal position keeps their place.
-    ...projectItems(unsentItems).map((message) => ({ ...message, unsent: true as const })),
     // The host's row draws a message once it has one, under its own id or the provider's.
     ...optimistic
       .filter(
@@ -205,4 +209,26 @@ export function projectStructuredAgentSessionMessages(
         ...(entry.sentWhileStopping ? { sentWhileStopping: true as const } : {})
       }))
   ]
+}
+
+/** `rows` with the few `placed` rows merged in at their journal places, so a reader that draws the
+ *  list as given needs no sort. A row with no journal place keeps the row before it. */
+function withRowsAtJournalPlaces(
+  rows: readonly NativeChatMessage[],
+  placed: NativeChatMessage[]
+): NativeChatMessage[] {
+  placed.sort(compareNativeChatTranscriptMessages)
+  const merged: NativeChatMessage[] = []
+  let next = 0
+  for (const row of rows) {
+    while (
+      next < placed.length &&
+      row.journalPosition !== undefined &&
+      compareNativeChatTranscriptMessages(placed[next], row) < 0
+    ) {
+      merged.push(placed[next++])
+    }
+    merged.push(row)
+  }
+  return merged.concat(placed.slice(next))
 }

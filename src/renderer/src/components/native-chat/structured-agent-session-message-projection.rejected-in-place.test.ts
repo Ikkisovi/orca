@@ -226,9 +226,8 @@ describe('a message the host accepted and then rejected, on the desktop', () => 
 
     expect(rows(projectStructuredAgentSessionMessages(items, [], submissions))).toEqual([
       { id: agentJournalSubmissionKey('seed'), text: 'seed', unsent: false },
-      { id: agentJournalSubmissionKey('again'), text: 'continue', unsent: false },
-      // Listed after the delivered rows; its journal position keeps its place.
-      { id: agentJournalSubmissionKey('first'), text: 'continue', unsent: true }
+      { id: agentJournalSubmissionKey('first'), text: 'continue', unsent: true },
+      { id: agentJournalSubmissionKey('again'), text: 'continue', unsent: false }
     ])
   })
 
@@ -265,8 +264,8 @@ describe('a message the host accepted and then rejected, on the desktop', () => 
     expect(rows(messages)).toEqual([
       { id: agentJournalSubmissionKey('seed'), text: 'seed', unsent: false },
       { id: agentJournalSubmissionKey('first'), text: 'again', unsent: false },
-      { id: agentJournalSubmissionKey('stopped'), text: 'again', unsent: false },
-      { id: agentJournalSubmissionKey('failed'), text: 'again', unsent: true }
+      { id: agentJournalSubmissionKey('failed'), text: 'again', unsent: true },
+      { id: agentJournalSubmissionKey('stopped'), text: 'again', unsent: false }
     ])
     expectStopRowRightAfterStopped(messages)
   })
