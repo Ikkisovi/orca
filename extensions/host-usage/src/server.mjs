@@ -88,7 +88,9 @@ export async function startServer({ stateDir = join(homedir(), '.cache', 'orca-h
         res.setHeader('Content-Type', 'application/json')
         if (url.pathname === '/api/usage' && req.method === 'GET') {
           res.end(JSON.stringify({ hosts: hosts.map(({ snapshot, ...host }) => ({ ...host,
-            hostname: snapshot?.hostname, providers: snapshot?.providers.map(({ daily, sessions, ...provider }) => provider) })),
+            hostname: snapshot?.hostname,
+            summary: snapshot ? rollup([{ ...host, snapshot }], Object.fromEntries(url.searchParams)).summary : null,
+            providers: snapshot?.providers.map(({ daily: _daily, sessions: _sessions, ...provider }) => provider) })),
             warnings, scanning: Boolean(scanning), interval: saved.interval, timezone: 'UTC',
             data: rollup(hosts, Object.fromEntries(url.searchParams)) })); return
         }

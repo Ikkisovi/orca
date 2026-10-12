@@ -4335,6 +4335,31 @@
           "emptyMessage": "尚未找到此范围内的本地 Muse 使用情况。",
           "noCostNote": "Muse 会话日志只记录token而不记录费用，因此不显示费用估算。",
           "recentSessionsDescription": "此范围内最近的本地 Muse 会话。"
+        },
+        "HostUsagePane": {
+          "ready": "已更新",
+          "scanning": "正在扫描",
+          "partial": "部分数据",
+          "error": "扫描失败，保留上次数据",
+          "needsSsh": "需要 SSH 连接",
+          "unscanned": "尚未扫描",
+          "allHosts": "全部主机",
+          "lastDays": "最近 {{days}} 天",
+          "allTime": "全部时间",
+          "title": "本机与远程用量",
+          "scope": "全主机智能体日志 · UTC 日期 · 非账户额度",
+          "install": "请在设置 → 插件中安装并启用 0.2 或更新版本的 Kai’s usage 插件。",
+          "loading": "正在连接用量监控服务…",
+          "tokens": "总 token",
+          "sessions": "所选期间内活跃会话",
+          "cost": "已知估算费用",
+          "partialCost": "部分模型价格不可用，费用估算不完整。",
+          "local": "本机",
+          "autoScan": "每 {{seconds}} 秒自动扫描",
+          "autoOff": "自动扫描已关闭",
+          "scan": "扫描所选主机",
+          "reload": "重新加载已采集统计",
+          "details": "每日图表、项目与会话"
         }
       },
       "sparse": {

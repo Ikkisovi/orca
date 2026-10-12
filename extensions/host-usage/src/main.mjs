@@ -4,10 +4,11 @@ import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { usageQuery, usageSummary } from './native-summary.mjs'
 
 let launching
 const quote = value => "'" + value.replaceAll("'", "'\\''") + "'"
-const receiptFile = join(homedir(), '.cache', 'orca-host-usage', 'dashboard', 'service.json')
+const receiptFile = join(process.env.ORCA_USAGE_STATE_DIR ?? join(homedir(), '.cache', 'orca-host-usage', 'dashboard'), 'service.json')
 async function currentService() {
   try {
     const receipt = JSON.parse(await readFile(receiptFile, 'utf8')), url = new URL(receipt.url)
@@ -40,16 +41,32 @@ async function ensureService() {
   return launching
 }
 export default function activate(orca) {
+  orca.commands.register('usage-summary', async (args = {}) => {
+    const query = usageQuery(args)
+    const dashboard = await ensureService()
+    const url = new URL(dashboard.url)
+    const response = await fetch(`${url.origin}/api/usage?${query}`, {
+      headers: { Authorization: `Bearer ${url.hash.slice(1)}` }, signal: AbortSignal.timeout(5000)
+    })
+    if (!response.ok) {
+      throw new Error(`Usage monitor returned ${response.status}`)
+    }
+    return usageSummary(await response.json())
+  })
   orca.commands.register('usage-open', async () => {
     const dashboard = await ensureService()
     const result = await runProcess({ program: cli, args: ['tab', 'create', '--url', dashboard.url, '--json'], timeoutMs: 20_000 })
     if (result.code !== 0) throw new Error(result.stderr || result.stdout)
     return { opened: true }
   })
-  orca.commands.register('usage-scan', async () => {
+  orca.commands.register('usage-scan', async (args = {}) => {
+    usageQuery(args)
     const dashboard = await ensureService()
     const url = new URL(dashboard.url)
-    await fetch(`${url.origin}/api/scan`, { method: 'POST', headers: { Authorization: `Bearer ${url.hash.slice(1)}`, 'Content-Type': 'application/json' }, body: '{}' })
+    const response = await fetch(`${url.origin}/api/scan`, { method: 'POST', headers: { Authorization: `Bearer ${url.hash.slice(1)}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ host: args.host ?? 'all' }), signal: AbortSignal.timeout(5000) })
+    if (!response.ok) {
+      throw new Error(`Usage monitor returned ${response.status}`)
+    }
     return { accepted: true }
   })
 }

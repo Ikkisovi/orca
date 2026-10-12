@@ -2,6 +2,8 @@
 
 An Orca extension for local and remote agent usage. The dashboard opens in Orca's built-in browser; its monitor runs in a named **Usage monitor** terminal on a local Orca workspace.
 
+This fork also integrates the plugin into **Settings → Stats & Usage**. Its default **Local & remote usage** view lists every discovered host, host/date selection, token and session totals, provider totals, last successful collection times, and scan errors. The original local provider views remain available in the same provider menu. This native integration requires the fork desktop build; installing the plugin alone on stock Orca does not change its Stats page.
+
 It scans Codex, Claude, OpenCode, Pi and DSH logs on the local machine and saved SSH hosts. Saved paired environments are linked to matching SSH connections. Hosts that only have a pairing connection show **needs SSH** until an SSH alias is added. Multiple aliases for a machine are combined using the SSH destination and the collector's machine/user identity.
 
 ## Use

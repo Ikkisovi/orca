@@ -294,6 +294,8 @@ module.exports = {
     'out/package.json',
     'out/cli/**',
     'out/shared/**',
+    // Source-built CLI hooks and profile maintenance also import plain main modules.
+    'out/main/**',
     'out/main/agent-hooks/**',
     'out/main/antigravity/**',
     'out/main/claude/**',

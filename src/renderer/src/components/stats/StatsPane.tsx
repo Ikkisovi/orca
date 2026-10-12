@@ -8,6 +8,7 @@ import { GrokUsagePane } from './GrokUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { MuseUsagePane } from './MuseUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
+import { HostUsagePane } from './HostUsagePane'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,
@@ -53,9 +54,15 @@ function formatTrackingSince(timestamp: number | null): string {
   })
 }
 
-type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'muse' | 'grok'
+type UsageTab = 'hosts' | 'overview' | 'claude' | 'codex' | 'opencode' | 'muse' | 'grok'
 
 const USAGE_ANALYTICS_OPTIONS = [
+  {
+    id: 'hosts',
+    get label() {
+      return translate('auto.components.stats.HostUsagePane.title', 'Local & remote usage')
+    }
+  },
   {
     id: 'overview',
     get label() {
@@ -95,7 +102,7 @@ const USAGE_ANALYTICS_OPTIONS = [
 ] as const satisfies readonly { id: UsageTab; label: string }[]
 
 function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element {
-  if (tab === 'overview') {
+  if (tab === 'overview' || tab === 'hosts') {
     return <BarChart3 className="size-3.5 text-muted-foreground" />
   }
   return <AgentIcon agent={tab} size={14} />
@@ -105,7 +112,7 @@ export function StatsPane(): React.JSX.Element {
   const summary = useAppStore((s) => s.statsSummary)
   const fetchStatsSummary = useAppStore((s) => s.fetchStatsSummary)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const [activeUsageTab, setActiveUsageTab] = useState<UsageTab>('overview')
+  const [activeUsageTab, setActiveUsageTab] = useState<UsageTab>('hosts')
   const activeUsageOption =
     USAGE_ANALYTICS_OPTIONS.find((option) => option.id === activeUsageTab) ??
     USAGE_ANALYTICS_OPTIONS[0]
@@ -207,7 +214,9 @@ export function StatsPane(): React.JSX.Element {
             active panel mounted avoids hidden tab-content layout/focus churn that produced a visible
             vertical jitter below the usage card when switching disabled providers. */}
         <div>
-          {activeUsageTab === 'overview' ? (
+          {activeUsageTab === 'hosts' ? (
+            <HostUsagePane />
+          ) : activeUsageTab === 'overview' ? (
             <UsageOverviewPane />
           ) : activeUsageTab === 'claude' ? (
             <ClaudeUsagePane />

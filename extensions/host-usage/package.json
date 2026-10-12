@@ -1,5 +1,5 @@
 {
-  "name": "orca-host-usage", "version": "0.1.0", "private": true, "type": "module",
+  "name": "orca-host-usage", "version": "0.2.0", "private": true, "type": "module",
   "scripts": {"build": "node scripts/build.mjs", "test": "node --test test/*.test.mjs", "start": "node dist/standalone.mjs"},
   "devDependencies": {"esbuild": "0.25.12"}
 }
