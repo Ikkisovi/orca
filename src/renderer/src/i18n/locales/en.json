@@ -19077,7 +19077,27 @@
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
         "queueFollowUpsCopy": "Messages you send while the agent is working wait as cards you can steer, edit, or delete. Messages with images send right away.",
-        "queueFollowUpsToggleLabel": "Toggle queue follow-ups"
+        "queueFollowUpsToggleLabel": "Toggle queue follow-ups",
+        "resumeToggleLabel": "Toggle automatic resume after a restart",
+        "shellEnvNamesLabel": "Variables to pass from your shell",
+        "shellEnvNamePlaceholder": "Variable name",
+        "shellEnvNameAdd": "Add",
+        "shellEnvNamesEmpty": "No variables added yet.",
+        "shellEnvNameRemove": "Remove {{value0}}",
+        "shellEnvNamesAlwaysPassed": "PATH, locale, and SSH_AUTH_SOCK are always passed. Applies the next time a chat starts or resumes.",
+        "shellEnvToggleLabel": "Toggle using your shell environment",
+        "behaviorTitle": "Behavior",
+        "resumeTitle": "Resume working chats automatically after a restart",
+        "resumeCopy": "When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.",
+        "resumeSearchUpdate": "update",
+        "resumeSearchRelaunch": "relaunch",
+        "queueSearchQueue": "queue",
+        "queueSearchSteer": "steer",
+        "shellEnvTitle": "Use your shell environment",
+        "shellEnvCopy": "Codex and Claude chats start with every variable your login shell exports, the same as a terminal. Turn off to choose which ones they get.",
+        "shellEnvSearchVariables": "environment variables",
+        "shellEnvSearchPath": "PATH",
+        "shellEnvSearchProxy": "proxy"
       }
     },
     "agentChildRow": {
