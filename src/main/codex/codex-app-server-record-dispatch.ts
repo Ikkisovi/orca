@@ -133,7 +133,7 @@ export function createCodexAppServerRecordDispatcher(input: {
     if (classification.kind === 'response') {
       const waiter = pending.get(classification.id)
       if (!waiter) {
-        reportUnclaimedReply(classification.id)
+        reportUnclaimedReply(classification.id, `reply over ${limitMb} MB dropped`)
         return
       }
       pending.delete(classification.id)
@@ -175,7 +175,7 @@ export function createCodexAppServerRecordDispatcher(input: {
       }
       return
     }
-    input.handlers.onUnhandledFrame?.('frame:oversized-unclassified', payload)
+    // The connection's own exit reports this failure; a row as well would say it twice.
     input.onProtocolFailure(
       new Error(
         classification.kind === 'response-unknown'

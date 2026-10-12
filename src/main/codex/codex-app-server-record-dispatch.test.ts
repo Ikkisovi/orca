@@ -78,7 +78,8 @@ describe('createCodexAppServerRecordDispatcher oversized records', () => {
     records.rejectOversized(oversized('{"id":7,"result":{"data":"xxxx'))
 
     expect(warn).toHaveBeenCalledWith(
-      '[codex-app-server] late reply to thread/turns/list after timeout (id 7)'
+      '[codex-app-server] late reply to thread/turns/list after timeout (id 7)',
+      'reply over 64 MB dropped'
     )
     warn.mockRestore()
     expect(other.reject).not.toHaveBeenCalled()
