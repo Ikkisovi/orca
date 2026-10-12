@@ -12,7 +12,7 @@ import type { SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
 import { Card, CardContent } from '../ui/card'
 import { getChatAppearanceSearchEntries } from './chat-appearance-search'
-import { getChatBehaviorSearchEntries, getChatBehaviorTitle } from './chat-behavior-search'
+import { getChatBehaviorTitle } from './chat-behavior-search'
 
 export function ChatSettingsSection({
   settings,
@@ -80,13 +80,11 @@ export function ChatSettingsSection({
               forceVisible={matchesSettingsSearch(query, [{ title }])}
             />
           ) : null}
-          {showAllBehavior || matchesSettingsSearch(query, getChatBehaviorSearchEntries()) ? (
-            <ChatBehaviorSetting
-              settings={settings}
-              updateSettings={updateSettings}
-              forceVisible={showAllBehavior}
-            />
-          ) : null}
+          <ChatBehaviorSetting
+            settings={settings}
+            updateSettings={updateSettings}
+            forceVisible={showAllBehavior}
+          />
           {showDesktopOnlySettings ? (
             <ChatNamingSetting
               key={chatPromptDiscardSignal}

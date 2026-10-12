@@ -9,6 +9,8 @@ import { getChatAppearanceSearchEntries } from './chat-appearance-search'
 import { getChatNamingSearchEntry } from './chat-naming-search'
 import { getChatInlineVisualsSearchEntry } from './chat-inline-visuals-search'
 import { getChatBehaviorSearchEntries } from './chat-behavior-search'
+import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { buildCmdJSettingsResults } from '../cmd-j/palette-results'
 import { isSettingsNavigationTarget } from '@/lib/settings-navigation-types'
@@ -170,6 +172,21 @@ describe('Chat settings page', () => {
     )
     expect(results).toHaveLength(1)
     expect(results[0]?.sectionId).toBe('chat')
+  })
+
+  it('hides the Behavior group when its only match is a switch this host does not offer', () => {
+    setLocalRuntimeCapabilitiesForTests([])
+    state.settingsSearchQuery = 'queue'
+    const { container } = renderChat(true)
+    expect(container.querySelector('#chat-behavior')).toBeNull()
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
+    cleanup()
+    renderChat(true)
+    expect(screen.getByRole('switch', { name: 'Toggle queue follow-ups' })).toBeTruthy()
+    expect(
+      screen.queryByRole('switch', { name: 'Toggle automatic resume after a restart' })
+    ).toBeNull()
+    setLocalRuntimeCapabilitiesForTests(null)
   })
 
   it('unmounts the page when the opt-in is disabled while it is selected', () => {
