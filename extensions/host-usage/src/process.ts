@@ -1,1 +1,1 @@
-export { runProcess, spawnProcess } from '../../../src/packages/process-host/src/run-process'
+export { runProcess, spawnProcess } from '../../../src/shared/child-process/run-process'

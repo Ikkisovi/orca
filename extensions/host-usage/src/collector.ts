@@ -5,10 +5,6 @@ import { mkdir, readFile, writeFile, rename } from 'node:fs/promises'
 import { scanCodexUsageFiles } from '../../../src/main/codex-usage/scanner'
 import { scanClaudeUsageFiles } from '../../../src/main/claude-usage/scanner'
 import { scanOpenCodeUsageDatabases } from '../../../src/main/opencode-usage/scanner'
-import { normalizeOpenCodeUsagePersistedDatabases } from '../../../src/main/opencode-usage/persisted-database-normalization'
-import { listClaudeProfileHomes } from '../../../src/main/claude-accounts/claude-profile-installed-router'
-import { getOrcaUserDataPath } from '../../../src/main/codex/codex-home-paths'
-import { readClaudeUsageSourceCache, persistClaudeUsageSourceCache } from '../../../src/main/claude-usage/persisted-source-cache'
 import { estimateCostUsd as codexCost } from '../../../src/main/codex-usage/codex-usage-cost-estimate'
 import { estimateCostUsd as claudeCost } from '../../../src/main/claude-usage/claude-model-pricing'
 import { PiScanner } from '../vendor/venus/scanner/pi-scanner'
@@ -68,19 +64,16 @@ export async function collect(config: any = {}) {
     const scanAt = Date.now()
     process.stderr.write(`Scanning ${provider}\n`)
     try {
-      const cacheFile = join(cache, `${provider}-sources${['pi', 'dsh'].includes(provider) ? '-v2' : ''}.json`)
+      const cacheFile = join(cache, `${provider}-sources${['pi', 'dsh'].includes(provider) ? '-v2' : '-native221-v1'}.json`)
       let result: any
       if (provider === 'codex') {
         result = await scanCodexUsageFiles([], await readJson(cacheFile))
         await atomicJson(cacheFile, result.processedFiles)
       } else if (provider === 'claude') {
-        const ref = { path: cacheFile, schemaVersion: 7, worktreeFingerprint: null, reuse: true }
-        const previous = await readClaudeUsageSourceCache(ref)
-        const profiles = listClaudeProfileHomes(getOrcaUserDataPath()).flatMap(home => [join(home, 'projects'), join(home, 'transcripts')])
-        result = await scanClaudeUsageFiles([], previous.sources, undefined, profiles, previous.verifiedSources)
-        await persistClaudeUsageSourceCache(ref, result.processedFiles, previous)
+        result = await scanClaudeUsageFiles([], await readJson(cacheFile))
+        await atomicJson(cacheFile, result.processedFiles)
       } else if (provider === 'opencode') {
-        result = await scanOpenCodeUsageDatabases([], normalizeOpenCodeUsagePersistedDatabases(await readJson(cacheFile)))
+        result = await scanOpenCodeUsageDatabases([], await readJson(cacheFile))
         await atomicJson(cacheFile, result.processedDatabases)
       } else if (provider === 'pi') {
         result = await new PiScanner(join(homedir(), '.pi', 'agent', 'sessions'), cacheFile).scan()

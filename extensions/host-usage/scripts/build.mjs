@@ -14,7 +14,7 @@ await build({
   } }]
 })
 await build({ absWorkingDir: root, entryPoints: ['src/process.ts'], outfile: 'dist/process.mjs', bundle: true, platform: 'node', target: 'node22', format: 'esm' })
-for (const name of ['server.mjs', 'hosts.mjs', 'rollup.mjs', 'main.mjs', 'standalone.mjs', 'dashboard.html', 'dashboard.js', 'dashboard.css', 'panel.html']) {
+for (const name of ['server.mjs', 'hosts.mjs', 'rollup.mjs', 'main.mjs', 'native-summary.mjs', 'standalone.mjs', 'dashboard.html', 'dashboard.js', 'dashboard.css', 'panel.html']) {
   await cp(resolve(root, 'src', name), resolve(dist, name))
 }
 await cp(resolve(root, 'orca-plugin.json'), resolve(dist, 'orca-plugin.json'))
