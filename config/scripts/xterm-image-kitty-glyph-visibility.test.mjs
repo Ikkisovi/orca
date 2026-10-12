@@ -172,6 +172,7 @@ describe('reserved placeholder glyph visibility', () => {
       expect(first).toBeLessThan(buffer.ybase)
       expect(buffer.lines.get(first).getFg(0) & INVISIBLE).toBe(0)
       h.terminal.scrollToTop()
+      await Promise.resolve()
       expect(buffer.lines.get(first).getFg(0) & INVISIBLE).toBeTruthy()
       h.terminal.scrollToBottom()
       await write(h.terminal, `\x1b[H${PLACEHOLDER}\u030D\r\n${'ROW\r\n'.repeat(24)}`)
@@ -210,6 +211,37 @@ describe('reserved placeholder glyph visibility', () => {
       ).toBe(true)
       expect(loads.every((mock) => mock.mock.calls.length === 0)).toBe(true)
       expect(sets.every((mock) => mock.mock.calls.length === 0)).toBe(true)
+    } finally {
+      h.terminal.dispose()
+    }
+  })
+
+  it('coalesces parser newline scrolling into one viewport scan per write batch', async () => {
+    const h = createPlaceholderTerminal()
+    try {
+      h.terminal.resize(80, 22)
+      const scans = vi.spyOn(h.kitty, 'hidePlaceholderGlyphs')
+      await write(h.terminal, 'ROW\r\n'.repeat(10000))
+      await flush()
+      expect(scans).toHaveBeenCalledTimes(1)
+      expect(h.terminal.buffer.active.cursorY).toBe(21)
+    } finally {
+      h.terminal.dispose()
+    }
+  })
+
+  it('cancels a queued scroll scan when the addon is disposed', async () => {
+    const h = createPlaceholderTerminal()
+    try {
+      await write(h.terminal, `${PLACEHOLDER}\r\n${'ROW\r\n'.repeat(24)}`)
+      await flush()
+      const scans = vi.spyOn(h.kitty, 'hidePlaceholderGlyphs')
+      h.terminal.scrollToTop()
+      h.addon.dispose()
+      await Promise.resolve()
+      expect(scans).not.toHaveBeenCalled()
+      expect(cell(h).getChars()).toBe(PLACEHOLDER)
+      expect(cell(h).isInvisible()).toBeFalsy()
     } finally {
       h.terminal.dispose()
     }

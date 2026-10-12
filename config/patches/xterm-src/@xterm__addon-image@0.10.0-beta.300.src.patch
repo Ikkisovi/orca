@@ -105,10 +105,18 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..73cedbe99f831bffd202697cc8ba80a4
      const cw = this._renderer.dimensions?.css.cell.width || CELL_SIZE_DEFAULT.width;
      const ch = this._renderer.dimensions?.css.cell.height || CELL_SIZE_DEFAULT.height;
 diff --git a/src/ImageAddon.ts b/src/ImageAddon.ts
-index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..ae2dc8bbbd315357b2d3fc77b970d0387b0af5dd 100644
+index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..fcabb492ab1e21853f7c473f8c4d085e1ab12414 100644
 --- a/src/ImageAddon.ts
 +++ b/src/ImageAddon.ts
-@@ -113,6 +113,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -6,6 +6,7 @@
+ import type { ITerminalAddon, IDisposable } from '@xterm/xterm';
+ import type { ImageAddon as IImageApi } from '@xterm/addon-image';
+ import { Emitter, type IEvent } from 'common/Event';
++import { MicrotaskTimer } from 'common/Async';
+ import { IIPHandler } from './IIPHandler';
+ import { ImageRenderer } from './ImageRenderer';
+ import { ImageStorage, CELL_SIZE_DEFAULT } from './ImageStorage';
+@@ -113,6 +114,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
    }
  
    public dispose(): void {
@@ -116,7 +124,7 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..ae2dc8bbbd315357b2d3fc77b970d038
      for (const obj of this._disposables) {
        obj.dispose();
      }
-@@ -196,14 +197,18 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -196,14 +198,21 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
  
      // Kitty graphics handler
      if (this._opts.kittySupport) {
@@ -124,15 +132,18 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..ae2dc8bbbd315357b2d3fc77b970d038
 +      const kittyStorage = new KittyImageStorage(this._storage!, this._renderer!);
        const kittyHandler = new KittyGraphicsHandler(this._opts, this._renderer!, kittyStorage, terminal);
        this._handlers.set('kitty', kittyHandler);
++      const scrollMask = new MicrotaskTimer();
++      const hide = (): void => kittyStorage.hidePlaceholderGlyphs(terminal);
        this._disposeLater(
          kittyStorage,
          kittyHandler,
-+        terminal.onWriteParsed(() => kittyStorage.hidePlaceholderGlyphs(terminal)),
-+        terminal.onScroll(() => kittyStorage.hidePlaceholderGlyphs(terminal)),
-+        terminal.onResize(() => kittyStorage.hidePlaceholderGlyphs(terminal)),
++        scrollMask,
++        terminal.onWriteParsed(() => { scrollMask.cancel(); hide(); }),
++        terminal.onScroll(() => scrollMask.set(hide)),
++        terminal.onResize(hide),
          terminal._core._inputHandler._parser.registerApcHandler({ final: 'G' }, kittyHandler)
        );
-+      kittyStorage.hidePlaceholderGlyphs(terminal);
++      hide();
      }
    }
  
