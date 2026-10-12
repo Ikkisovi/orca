@@ -1,13 +1,14 @@
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import type { SettingsSearchEntry } from './settings-search'
+import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from './native-chat-resume-setting-target'
 
 export const getChatBehaviorTitle = (): string =>
   translate('components.settings.nativeChat.behaviorTitle', 'Behavior')
 
 export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
   resumeOnRestart: {
-    targetSectionId: 'chat-resume-on-restart',
+    targetSectionId: NATIVE_CHAT_RESUME_SETTING_SECTION_ID,
     title: translate(
       'components.settings.nativeChat.resumeTitle',
       'Resume working chats automatically after a restart'
