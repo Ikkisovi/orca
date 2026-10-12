@@ -203,7 +203,10 @@ describe('mobile structured send actions', () => {
     await act(async () => {
       expect(await hook!.sendWithOutcome('same text')).toBe('accepted')
     })
-    expect(hook!.session.messages).toEqual(messages)
+    // The new send is drawn under its own id until its row lands.
+    const sent = agentJournalSubmissionKey(sentIds()[0] ?? '')
+    expect(hook!.session.messages.map((message) => message.id)).toEqual([messages[0]?.id, sent])
+    expect(hook!.session.messages[0]).toEqual(messages[0])
     expect(event.page.submissions[0]?.dispatchState).toBe('unknown')
     expect(calls()).toHaveLength(1)
   })
