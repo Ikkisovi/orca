@@ -1,8 +1,8 @@
 /**
  * A launch whose pane the caller laid out and starts itself (`spawnTrigger: 'window-pane'`): the
  * host plans, hands the plan to the pane's running launch and answers at once, never waiting on a
- * pane that may mount late or never. The pane's spawn commit or failure settles the launch record;
- * until then a replay answers what the first request did.
+ * pane that may mount late or never. The pane's spawn reports how it ended, which settles the launch
+ * record; until then the launch stays in flight, so a replay joins it.
  */
 
 import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
@@ -13,20 +13,19 @@ import {
   type AgentLaunchPane
 } from '../../../agent-launch/agent-launch-pane-attachment'
 import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
+import type { AgentLaunchPaneVerdict } from '../../../../shared/agent-launch-pane-verdict'
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import type { RpcContext } from '../core'
 import { agentLaunchFailureCode } from './agent-launch-failure-code'
-import { settleQuietly } from './agent-launch-execution-outcome'
+
+/** How the pane's spawn ended: the terminal it made, or why nothing started. */
+export type WindowPaneSpawn =
+  | { terminal: Extract<AgentLaunchResult['outcome'], { kind: 'terminal' }> }
+  | { failure: string; cause?: unknown }
 
 export type WindowPaneLaunch = {
   handOff(pane: AgentLaunchPane, plan: TerminalCreateOptions): void
-  /** The caller's answer, which the pane's commit records with the terminal it made. */
-  answered(result: AgentLaunchResult): void
-}
-
-type LaunchRecord = {
-  settle: (result: AgentLaunchResult) => Promise<void>
-  fail: (code: string, cause?: unknown) => Promise<void>
+  spawned: Promise<WindowPaneSpawn>
 }
 
 /** Only the desktop's own window lays out a pane on this machine. */
@@ -39,68 +38,41 @@ export function assertWindowPaneTrigger(params: AgentLaunchParams, context: RpcC
   }
 }
 
-type WaitingAnswer = {
-  fingerprint: string
-  promise: Promise<AgentLaunchResult>
-}
-const answersWaitingOnPane = new Map<string, WaitingAnswer>()
-
-export function windowPaneAnswer(operationKey: string): WaitingAnswer | undefined {
-  return answersWaitingOnPane.get(operationKey)
-}
-
-export function windowPaneLaunch(
-  context: RpcContext,
-  record: LaunchRecord,
-  operation: { key: string; fingerprint: string }
-): WindowPaneLaunch {
-  let answered!: (result: AgentLaunchResult) => void
-  const answer = new Promise<AgentLaunchResult>((resolve) => (answered = resolve))
+export function windowPaneLaunch(context: RpcContext): WindowPaneLaunch {
+  let ended!: (spawn: WindowPaneSpawn) => void
+  const spawned = new Promise<WindowPaneSpawn>((resolve) => (ended = resolve))
   return {
-    answered,
+    spawned,
     handOff: (pane, plan) => {
       const running = trackRunningAgentLaunchPane(pane)
-      answersWaitingOnPane.set(operation.key, {
-        fingerprint: operation.fingerprint,
-        promise: answer
-      })
       let over = false
-      const end = (settlement: () => Promise<void>): boolean => {
-        if (over) {
-          return false
-        }
-        over = true
-        answersWaitingOnPane.delete(operation.key)
-        void settleQuietly(settlement())
-        return true
-      }
-      const committed = ({ id, incarnationId }: { id: string; incarnationId?: string }): void => {
-        const handle = context.runtime.getTerminalHandleForPaneKey(pane.paneKey) ?? id
-        const outcome = {
-          kind: 'terminal' as const,
-          handle,
-          paneKey: pane.paneKey,
-          ptyId: id
-        }
-        const recorded = {
-          ...outcome,
-          ...(incarnationId ? { incarnationId } : {})
-        }
-        if (end(() => answer.then((result) => record.settle({ ...result, outcome: recorded })))) {
-          running.finish({ kind: 'proceed' })
+      const end = (spawn: WindowPaneSpawn, verdict: AgentLaunchPaneVerdict): void => {
+        if (!over) {
+          over = true
+          ended(spawn)
+          running.finish(verdict)
         }
       }
+      const committed = ({ id, incarnationId }: { id: string; incarnationId?: string }): void =>
+        end(
+          {
+            terminal: {
+              kind: 'terminal',
+              handle: context.runtime.getTerminalHandleForPaneKey(pane.paneKey) ?? id,
+              paneKey: pane.paneKey,
+              ptyId: id,
+              ...(incarnationId ? { incarnationId } : {})
+            }
+          },
+          { kind: 'proceed' }
+        )
       const failed = (error: unknown): void => {
         const code = agentLaunchFailureCode(error)
-        if (end(() => record.fail(code, error))) {
-          running.finish({ kind: 'not-started', code })
-        }
+        end({ failure: code, cause: error }, { kind: 'not-started', code })
       }
-      running.planReady({ plan, committed, failed }, () => {
-        if (end(() => record.fail(AGENT_LAUNCH_TAB_CLOSED_CODE))) {
-          running.finish({ kind: 'withdrawn' })
-        }
-      })
+      running.planReady({ plan, committed, failed }, () =>
+        end({ failure: AGENT_LAUNCH_TAB_CLOSED_CODE }, { kind: 'withdrawn' })
+      )
     }
   }
 }

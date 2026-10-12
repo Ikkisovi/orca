@@ -67,11 +67,7 @@ import {
   type AgentLaunchView
 } from './agent-launch-tab-publication'
 import { joinOrRunAgentLaunch } from './agent-launch-in-flight'
-import {
-  assertWindowPaneTrigger,
-  windowPaneAnswer,
-  windowPaneLaunch
-} from './agent-launch-window-pane'
+import { assertWindowPaneTrigger, windowPaneLaunch } from './agent-launch-window-pane'
 
 /**
  * Advertising `agent.launch.v2` is a client's statement that it understands EITHER outcome — a
@@ -188,7 +184,8 @@ function runLegacyAgentLaunch(
 async function executeReplaySafeAgentLaunch(
   params: AgentLaunchParams & { operationId: string },
   context: RpcContext,
-  fingerprint: string
+  fingerprint: string,
+  keepJoinableUntil: (settled: Promise<void>) => void
 ): Promise<AgentLaunchResult> {
   // The tab is the host's first act: admission has a cold cost the user should not watch. A
   // caller that laid out its own pane already shows it.
@@ -216,19 +213,15 @@ async function executeReplaySafeAgentLaunch(
     return admission.result
   }
   early?.executing()
-  const pane =
-    params.spawnTrigger === 'window-pane'
-      ? windowPaneLaunch(context, admission, {
-          key: agentSessionOperationKey(admission.callerKey, params.operationId),
-          fingerprint
-        })
-      : undefined
+  const pane = params.spawnTrigger === 'window-pane' ? windowPaneLaunch(context) : undefined
   return withEarlyTab(early, () =>
-    executeAdmittedAgentLaunch(params, context, admission, {
-      early,
-      presentation: params.presentation,
-      ...(pane ? { pane } : {})
-    })
+    executeAdmittedAgentLaunch(
+      params,
+      context,
+      admission,
+      { early, presentation: params.presentation, ...(pane ? { pane } : {}) },
+      keepJoinableUntil
+    )
   )
 }
 
@@ -239,7 +232,8 @@ async function executeAdmittedAgentLaunch(
     Awaited<ReturnType<typeof admitAgentLaunchOperation>>,
     { decision: 'execute' }
   >,
-  view: AgentLaunchView
+  view: AgentLaunchView,
+  keepJoinableUntil: (settled: Promise<void>) => void
 ): Promise<AgentLaunchResult> {
   let intent: AgentLaunchIntent
   try {
@@ -275,8 +269,17 @@ async function executeAdmittedAgentLaunch(
     // The user closed its tab after the spawn left: the agent stops, as any closed tab's does.
     await settleLaunchWhoseTabWasClosed(context, view.early, admission)
   }
-  if (result.outcome.kind === 'pane') {
-    view.pane?.answered(result)
+  if (result.outcome.kind === 'pane' && view.pane) {
+    // Recorded once the pane's own spawn settles; a replay joins this launch until then.
+    keepJoinableUntil(
+      settleQuietly(
+        view.pane.spawned.then((spawn) =>
+          'terminal' in spawn
+            ? admission.settle({ ...result, outcome: spawn.terminal })
+            : admission.fail(spawn.failure, spawn.cause)
+        )
+      )
+    )
     return result
   }
   // Bookkeeping: a failure leaves the first write, whose owed prompt replays as `unconfirmed` (or as
@@ -291,10 +294,8 @@ function runReplaySafeAgentLaunch(
 ): Promise<AgentLaunchResult> {
   const key = agentSessionOperationKey(agentLaunchOperationCallerKey(context), params.operationId)
   const fingerprint = computeAgentLaunchFingerprint(params)
-  return joinOrRunAgentLaunch(
-    context.runtime,
-    { key, fingerprint, waiting: windowPaneAnswer(key) },
-    () => executeReplaySafeAgentLaunch(params, context, fingerprint)
+  return joinOrRunAgentLaunch(context.runtime, { key, fingerprint }, (keepJoinableUntil) =>
+    executeReplaySafeAgentLaunch(params, context, fingerprint, keepJoinableUntil)
   )
 }
 

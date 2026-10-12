@@ -3,18 +3,19 @@
 import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
-export type InFlightAgentLaunch = {
+type InFlightAgentLaunch = {
   fingerprint: string
   promise: Promise<AgentLaunchResult>
 }
 
 const inFlightByRuntime = new WeakMap<OrcaRuntimeService, Map<string, InFlightAgentLaunch>>()
 
-/** Joins the run already in flight under `key` (or `waiting`), else starts `run` under it. */
+/** Joins the run already in flight under `key`, else starts `run` under it. A run may keep itself
+ *  joinable past its answer, until a settlement it names. */
 export function joinOrRunAgentLaunch(
   runtime: OrcaRuntimeService,
-  launch: { key: string; fingerprint: string; waiting?: InFlightAgentLaunch },
-  run: () => Promise<AgentLaunchResult>
+  launch: { key: string; fingerprint: string },
+  run: (keepJoinableUntil: (settled: Promise<void>) => void) => Promise<AgentLaunchResult>
 ): Promise<AgentLaunchResult> {
   const { key, fingerprint } = launch
   let inFlight = inFlightByRuntime.get(runtime)
@@ -22,18 +23,26 @@ export function joinOrRunAgentLaunch(
     inFlight = new Map()
     inFlightByRuntime.set(runtime, inFlight)
   }
-  const active = inFlight.get(key) ?? launch.waiting
+  const active = inFlight.get(key)
   if (active) {
     if (active.fingerprint !== fingerprint) {
       return Promise.reject(new Error('agent_session_operation_conflict'))
     }
     return active.promise
   }
-  const promise: Promise<AgentLaunchResult> = run().finally(() => {
+  let kept: Promise<void> | undefined
+  const promise = run((settled) => (kept = settled))
+  inFlight.set(key, { fingerprint, promise })
+  const forget = (): void => {
     if (inFlight.get(key)?.promise === promise) {
       inFlight.delete(key)
     }
-  })
-  inFlight.set(key, { fingerprint, promise })
+  }
+  void promise
+    .then(
+      () => kept,
+      () => undefined
+    )
+    .then(forget, forget)
   return promise
 }
