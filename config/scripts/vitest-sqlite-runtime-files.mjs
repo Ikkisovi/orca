@@ -44,6 +44,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/claude/claude-structured-provider-fallback.test.ts',
   'src/main/claude/claude-subagent-permission-request.test.ts',
   'src/main/claude/claude-subagent-resume-after-restart.test.ts',
+  'src/main/codex/codex-oversized-lifecycle.test.ts',
   'src/main/codex/codex-provider-retry-idle-sweep.test.ts',
   'src/main/codex/codex-subagent-roster-retention.test.ts',
   'src/main/codex/codex-structured-journal-exit-convergence.test.ts',
