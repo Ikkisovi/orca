@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kai's usage · Orca</title><link rel="stylesheet" href="/tokens.css"><link rel="stylesheet" href="/dashboard.css"><script src="/dashboard.js" defer></script></head>
+<body><main>
+<header><div><h1>Kai's usage</h1><p>Orca · 本机与远程主机</p></div><div class="actions"><button id="reload">重新加载统计</button><button class="primary" id="scan">扫描主机</button></div></header>
+<section class="toolbar" aria-label="筛选">
+<label>主机<select id="host"><option value="all">所有主机</option></select></label>
+<label>客户端<select id="provider"><option value="all">全部客户端</option><option>codex</option><option>claude</option><option>opencode</option><option>pi</option><option>dsh</option></select></label>
+<label>时间范围<select id="range"><option value="7">近 7 天</option><option value="30" selected>近 30 天</option><option value="90">近 90 天</option><option value="month">本月</option><option value="previous">上月</option><option value="all">全部</option><option value="custom">自定义</option></select></label>
+<label>开始<input id="from" type="date"></label><label>结束<input id="to" type="date"></label>
+<label>自动扫描<select id="interval"><option value="0">关闭</option><option value="30">每 30 秒</option><option value="60" selected>每分钟</option><option value="300">每 5 分钟</option></select></label>
+</section>
+<p class="caption">统计范围：各主机的 agent 日志 · 日期按 UTC · 重新加载读取已有统计；扫描会重新检查各主机日志。</p>
+<p id="error" role="alert" hidden></p><p id="status" role="status">正在连接…</p>
+<section id="hosts" aria-label="主机状态"></section>
+<section class="metrics" aria-label="用量概览"><article><p>总 Tokens</p><strong id="total">—</strong></article><article><p>输入 / 输出</p><strong id="io">—</strong></article><article><p>缓存读取</p><strong id="cached">—</strong></article><article><p>范围内活跃会话</p><strong id="sessions">—</strong></article><article><p>已知价格估算 · USD</p><strong id="cost">—</strong><small id="cost-note"></small></article></section>
+<section><h2>每日用量</h2><div id="chart" aria-label="每日 tokens 图表"></div></section>
+<section><h2>客户端</h2><div id="providers"></div></section>
+<section class="columns"><div><h2>模型</h2><div id="models"></div></div><div><h2>项目</h2><input id="project" placeholder="按项目路径筛选" aria-label="按项目筛选"><div id="projects"></div></div></section>
+<section><h2>最近会话</h2><p class="caption">显示与所选日期相交的会话；表中 Tokens 为单个会话累计值。</p><div id="recent"></div></section>
+<details><summary>添加远程主机</summary><form id="add-host"><label>现有 SSH 别名<input id="alias" required placeholder="openalice-main"></label><button>添加主机</button></form><p class="caption">自动发现 Orca 已保存的 SSH 主机。同一机器的连接别名合并统计。仅配对的环境需要对应的 SSH 连接。</p></details>
+<footer>日志用量与账号额度、账单用量分别统计。缓存与 reasoning 的计数口径沿用各客户端。未知模型价格保留为未知。</footer>
+</main></body></html>
