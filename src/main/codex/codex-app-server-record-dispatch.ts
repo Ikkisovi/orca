@@ -12,6 +12,10 @@ import { classifyJsonRpcPrefix } from '../../shared/json-rpc-record-prefix'
 const OVERSIZED_REQUEST_ERROR_CODE = -32001
 const MAX_REMEMBERED_TIMEOUTS = 64
 
+function megabytes(bytes: number): number {
+  return Math.ceil(bytes / (1024 * 1024))
+}
+
 export type CodexPendingRequest = {
   method: string
   resolve: (result: unknown) => void
@@ -126,6 +130,8 @@ export function createCodexAppServerRecordDispatcher(input: {
   const rejectOversized = (rejected: NdjsonRejectedRecord & { kind: 'line-too-long' }): void => {
     const classification = classifyJsonRpcPrefix(rejected.prefix)
     const payload = {
+      // The chat row's sentence; without it the row reads the bare `reason` code.
+      message: `Codex sent an update over ${megabytes(rejected.maxLineBytes)} MB, so Orca skipped it.`,
       reason: 'record-too-large',
       observedBytes: rejected.observedBytes,
       maxBytes: rejected.maxLineBytes,

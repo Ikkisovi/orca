@@ -13,6 +13,8 @@ import {
   type CodexAppServerSpawn
 } from './codex-app-server-process-tree-kill'
 import { createProviderRecordReader } from '../provider-process/provider-record-reader'
+import { classifyJsonRpcPrefix } from '../../shared/json-rpc-record-prefix'
+import { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-error'
 
 // Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
 // state (hook trust hashes, the sqlite thread index). This module owns the
@@ -181,7 +183,24 @@ export async function runCodexAppServerSession<T>(
         waiter.resolve(message)
       }
     },
-    onRejected: () => undefined,
+    onRejected: (rejected) => {
+      if (rejected.kind !== 'line-too-long') {
+        return
+      }
+      // Settle the call the dropped reply belonged to now instead of at the session deadline.
+      const record = classifyJsonRpcPrefix(rejected.prefix)
+      const error = new CodexAppServerFrameSizeError(
+        null,
+        rejected.observedBytes,
+        rejected.maxLineBytes
+      )
+      if (record.kind === 'response-unknown') {
+        failPending(error)
+      } else if (record.kind === 'response') {
+        pending.get(record.id)?.reject(error)
+        pending.delete(record.id)
+      }
+    },
     onFatal: failPending
   })
 

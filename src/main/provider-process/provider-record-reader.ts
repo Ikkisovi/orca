@@ -6,6 +6,10 @@ import {
 
 type RecordReaderStream = Pick<Readable, 'on' | 'pause' | 'resume' | 'setEncoding'>
 
+/** One provider stdout record, bounded so a runaway line cannot exhaust the process reading it.
+ *  Far above anything kept: Codex caps command/MCP output at 1 MiB and journal rows keep 16 KiB. */
+export const PROVIDER_RECORD_MAX_BYTES = 64 * 1024 * 1024
+
 export type ProviderRecordReader = {
   pause: () => void
   resume: () => void
@@ -19,8 +23,7 @@ export function createProviderRecordReader(input: {
 }): ProviderRecordReader {
   let paused = false
   const framer = createIncrementalNdjsonFramer(input.onRecord, input.onRejected, {
-    // The provider owns this local stdio stream, so valid agent payloads keep full fidelity.
-    maxLineBytes: Number.POSITIVE_INFINITY,
+    maxLineBytes: PROVIDER_RECORD_MAX_BYTES,
     shouldPause: () => paused
   })
 
