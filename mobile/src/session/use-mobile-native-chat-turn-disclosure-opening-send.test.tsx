@@ -92,8 +92,7 @@ function Harness(props: {
   const messages: NativeChatMessage[] = projectStructuredAgentSessionMessages(
     props.items,
     [],
-    props.submissions,
-    { rejectedInPlace: false }
+    props.submissions
   )
   const { data } = buildMobileNativeChatTransientData({
     messages,

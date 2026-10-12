@@ -142,11 +142,8 @@ export function useMobileStructuredAgentSession(args: {
     [agent, state.items]
   )
   const messages = useMemo(
-    // Off: the phone hands a rejected message back to its composer, so a row would show it twice.
-    () =>
-      projectStructuredAgentSessionMessages(transcriptItems, [], state.submissions, {
-        rejectedInPlace: false
-      }),
+    // A message the host recorded and then rejected stays where it was sent, as not sent.
+    () => projectStructuredAgentSessionMessages(transcriptItems, [], state.submissions),
     [transcriptItems, state.submissions]
   )
   const turnId = runningStructuredAgentSessionTurnId(state)

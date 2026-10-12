@@ -29,12 +29,6 @@ export type StructuredAgentSessionOptimisticMessage = {
   sentWhileStopping?: true
 }
 
-export type StructuredAgentSessionMessageProjectionOptions = {
-  /** Draw a message the host accepted and then rejected where the host recorded it, as not sent.
-   *  Off for a client that hands such a message back to its composer instead. */
-  rejectedInPlace: boolean
-}
-
 /** The loaded items that are a conversation command such as `/compact`, by item id. */
 export function structuredAgentSessionCommandItemIds(
   items: readonly AgentJournalRenderItem[]
@@ -105,7 +99,6 @@ export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
   submissions: readonly AgentJournalSubmission[],
-  options: StructuredAgentSessionMessageProjectionOptions,
   projectItems = projectStructuredItemsToNativeChat
 ): NativeChatMessage[] {
   // A send a Stop took back before the agent started it stays where it was sent, as the
@@ -128,13 +121,11 @@ export function projectStructuredAgentSessionMessages(
   // Runs on every streaming commit, so a chat with no such send pays nothing for placing one.
   const placement =
     stoppedBeforeStart.size > 0 ? placeStoppedSends(items, submissions, stoppedBeforeStart) : null
-  const inPlace = options.rejectedInPlace
-    ? structuredAgentSessionRejectedShownInPlace(
-        submissions,
-        structuredAgentSessionCommandItemIds(items),
-        items.filter((item) => isAgentSessionContextClear(item.body)).map((item) => item.sequence)
-      )
-    : new Set<string>()
+  const inPlace = structuredAgentSessionRejectedShownInPlace(
+    submissions,
+    structuredAgentSessionCommandItemIds(items),
+    items.filter((item) => isAgentSessionContextClear(item.body)).map((item) => item.sequence)
+  )
   const visibleItems: AgentJournalRenderItem[] = []
   const unsentItems: AgentJournalRenderItem[] = []
   for (const item of items) {
