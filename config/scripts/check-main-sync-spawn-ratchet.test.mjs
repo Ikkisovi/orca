@@ -170,6 +170,17 @@ describe('main sync-spawn ratchet', () => {
     ).toEqual({ count: 1, symbols: ['hardenSecurePath'] })
   })
 
+  it.each([
+    'const args = [p, { isDirectory: false, platform: "win32", sync: true }] as const\nhardenSecurePath(...args)',
+    'const options = [{ isDirectory: false, platform: "win32", sync: true }] as const\nhardenSecurePath(p, ...options)',
+    'hardenSecurePath(...paths, { isDirectory: true, sync: false })'
+  ])('counts hardenSecurePath with spread call arguments: %s', (source) => {
+    expect(uses(`import { hardenSecurePath } from '../shared/secure-file'\n${source}`)).toEqual({
+      count: 1,
+      symbols: ['hardenSecurePath']
+    })
+  })
+
   it('counts re-exports in the re-exporting module and internal calls in the defining one', () => {
     expect(
       uses(

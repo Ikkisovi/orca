@@ -64,7 +64,7 @@ const GATED_FAMILIES = [
   { modules: ['src/main/win32-utils'], advice: { grantDirAcl: 'use grantDirAclAsync' } }
 ]
 const ADVICE = new Map(GATED_FAMILIES.flatMap((family) => Object.entries(family.advice)))
-// Synchronous unless a call passes no options or a spread-free literal whose `sync` is absent or false.
+// Only spread-free calls with no options or a literal with absent/false `sync` are exempt.
 const SYNC_FLAG_SYMBOLS = new Set(['hardenSecurePath'])
 const FALLBACK_OPERATORS = new Set([ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken])
 const BASELINE_HEADER = [
@@ -108,7 +108,11 @@ export function gatedSymbolsFor(file, specifier) {
 
 function isAsyncOnlyCall(callee) {
   const call = callee.parent
-  if (!ts.isCallExpression(call) || call.expression !== callee) {
+  if (
+    !ts.isCallExpression(call) ||
+    call.expression !== callee ||
+    call.arguments.some(ts.isSpreadElement)
+  ) {
     return false
   }
   const options = unwrap(call.arguments[1])
