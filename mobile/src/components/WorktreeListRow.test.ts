@@ -11,7 +11,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
-import { WorktreeListRow, type WorktreeListRowItem } from './WorktreeListRow'
+import type { Worktree } from '../worktree/workspace-list-types'
+import { WorktreeListRow } from './WorktreeListRow'
 
 const { agentSpinnerRender, agentStateDotRender } = vi.hoisted(() => ({
   agentSpinnerRender: vi.fn(),
@@ -56,10 +57,7 @@ vi.mock('./WorktreeMetaGlyphs', () => ({
   WorktreeMetaGlyphs: () => null
 }))
 
-type TestItem = WorktreeListRowItem & {
-  status: 'working' | 'active' | 'permission' | 'done' | 'inactive'
-  lastOutputAt: number
-}
+type TestItem = Worktree & { status: NonNullable<Worktree['status']> }
 
 const stableRepoIcon = { type: 'emoji', emoji: 'o' } as const
 let updateSibling: Dispatch<SetStateAction<number>> = () => undefined
@@ -113,7 +111,11 @@ function agent(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktre
 
 const baseItem: TestItem = {
   worktreeId: 'worktree-1',
+  repoId: 'repo-1',
   repo: 'orca',
+  path: 'mobile-list',
+  hasAttachedPty: true,
+  isPinned: false,
   branch: 'feature/mobile-list',
   displayName: 'mobile-list',
   liveTerminalCount: 1,

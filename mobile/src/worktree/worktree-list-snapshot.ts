@@ -19,14 +19,20 @@ export function areWorktreeListsEqual(
   return true
 }
 
-function areWorktreesEqual(left: Worktree, right: Worktree): boolean {
+// Covers every Worktree field: the catalog keeps its array on equality and list rows skip renders on it.
+export function areWorktreesEqual(left: Worktree, right: Worktree): boolean {
   return (
+    (left.sectionListKey ?? null) === (right.sectionListKey ?? null) &&
+    (left.workspaceKind ?? null) === (right.workspaceKind ?? null) &&
     left.worktreeId === right.worktreeId &&
     left.repoId === right.repoId &&
     left.repo === right.repo &&
     left.branch === right.branch &&
     (left.hostId ?? null) === (right.hostId ?? null) &&
     (left.terminalPlatform ?? null) === (right.terminalPlatform ?? null) &&
+    (left.hostContextLabel ?? null) === (right.hostContextLabel ?? null) &&
+    (left.hostContextHostId ?? null) === (right.hostContextHostId ?? null) &&
+    (left.hostContextHealthLabel ?? null) === (right.hostContextHealthLabel ?? null) &&
     left.displayName === right.displayName &&
     (left.workspaceStatus ?? null) === (right.workspaceStatus ?? null) &&
     (left.sortOrder ?? null) === (right.sortOrder ?? null) &&
@@ -42,6 +48,10 @@ function areWorktreesEqual(left: Worktree, right: Worktree): boolean {
     (left.parentWorktreeInstanceId ?? null) === (right.parentWorktreeInstanceId ?? null) &&
     (left.parentWorktreeId ?? null) === (right.parentWorktreeId ?? null) &&
     areStringArraysEqual(left.childWorktreeIds ?? [], right.childWorktreeIds ?? []) &&
+    (left.lineageDepth ?? null) === (right.lineageDepth ?? null) &&
+    (left.lineageChildCount ?? null) === (right.lineageChildCount ?? null) &&
+    (left.lineageCollapsed ?? false) === (right.lineageCollapsed ?? false) &&
+    (left.isLastLineageChild ?? false) === (right.isLastLineageChild ?? false) &&
     left.liveTerminalCount === right.liveTerminalCount &&
     left.hasAttachedPty === right.hasAttachedPty &&
     left.preview === right.preview &&
@@ -106,13 +116,17 @@ function areAgentRowsEqual(
       a.workingMode !== b.workingMode ||
       a.agentType !== b.agentType ||
       a.prompt !== b.prompt ||
+      a.taskTitle !== b.taskTitle ||
+      a.displayName !== b.displayName ||
       a.lastAssistantMessage !== b.lastAssistantMessage ||
       a.toolName !== b.toolName ||
       a.toolInput !== b.toolInput ||
       a.interrupted !== b.interrupted ||
       !areMainAgentsEqual(a.mainAgent, b.mainAgent) ||
       a.stateStartedAt !== b.stateStartedAt ||
-      a.updatedAt !== b.updatedAt
+      a.updatedAt !== b.updatedAt ||
+      (a.restoredUnconfirmed ?? false) !== (b.restoredUnconfirmed ?? false) ||
+      a.structuredHostOwned !== b.structuredHostOwned
     ) {
       return false
     }
