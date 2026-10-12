@@ -76,8 +76,9 @@ export const styles = StyleSheet.create({
     fontSize: typography.metaSize
   },
   unsentNotice: {
+    maxWidth: '88%',
     marginTop: spacing.xs,
-    color: colors.textMuted,
+    color: colors.statusRed,
     fontSize: typography.metaSize
   },
   toolRun: {

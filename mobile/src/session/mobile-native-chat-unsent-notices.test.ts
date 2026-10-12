@@ -10,6 +10,7 @@ import type {
   AgentJournalSubmission
 } from '../../../src/shared/agent-session-journal-types'
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../src/shared/structured-agent-session-start-failure-row-key'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
 import { mobileNativeChatUnsentNotices } from './mobile-native-chat-unsent-notices'
 
 function submission(
@@ -71,8 +72,14 @@ describe("the phone's line under a not-sent message", () => {
     expect(notices.get(agentJournalSubmissionKey('lost'))).toBe('Your message was not sent.')
   })
 
-  it('gives one shared empty map when nothing was rejected', () => {
-    const accepted = { items: [], submissions: [submission('sent', { dispatchState: 'accepted' })] }
+  it('gives one shared empty map when no send failed, a Stop taking one back included', () => {
+    const accepted = {
+      items: [],
+      submissions: [
+        submission('sent', { dispatchState: 'accepted' }),
+        submission('stopped', { reason: DISPATCH_REJECTED_CANCELLED })
+      ]
+    }
     expect(mobileNativeChatUnsentNotices(accepted, 'claude').size).toBe(0)
     expect(mobileNativeChatUnsentNotices(accepted, 'claude')).toBe(
       mobileNativeChatUnsentNotices(null, 'claude')

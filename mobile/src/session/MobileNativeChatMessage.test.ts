@@ -176,15 +176,15 @@ describe('MobileNativeChatMessage', () => {
         (node) => String(node.type) === 'Text' && node.props.style === styles.unsentNotice
       )
 
-    it('says why under the bubble, and that it was not sent when no reason is known', () => {
+    it('says why under the bubble, and draws no line without a reason, as the desktop', () => {
       expect(textIn(render(notSent, { unsentNotice: 'Claude is not signed in.' }).root)).toEqual([
         'fix it',
         'Claude is not signed in.'
       ])
-      expect(textIn(render(notSent).root).at(-1)).toBe('Your message was not sent.')
+      expect(lineIn(render(notSent))).toHaveLength(0)
     })
 
-    it("draws the line under another agent's message too, and never under a delivered one", () => {
+    it("draws the line under another agent's message too", () => {
       const fromAgent: NativeChatMessage = {
         ...notSent,
         from: {
@@ -198,8 +198,9 @@ describe('MobileNativeChatMessage', () => {
           orchestration: null
         }
       }
-      expect(lineIn(render(fromAgent))).toHaveLength(1)
-      expect(lineIn(render(userMessage([{ type: 'text', text: 'fix it' }])))).toHaveLength(0)
+      expect(
+        lineIn(render(fromAgent, { unsentNotice: 'Your message was not sent.' }))
+      ).toHaveLength(1)
     })
   })
 
