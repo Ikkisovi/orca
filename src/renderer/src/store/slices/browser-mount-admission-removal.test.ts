@@ -1,8 +1,7 @@
 /**
  * Leak regression (STA-7436): a background-opened page's start admission must end however the page
  * leaves the store. A bulk worktree purge used to drop the page records without releasing it.
- * The removal sweep below mirrors useTerminalWindowLifecycle, which destroys every page id that
- * disappears from the store.
+ * The sweep is the same function useTerminalWindowLifecycle runs on every store change.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -32,7 +31,7 @@ createStoreCascadesMockApi()
 
 const { isBrowserPageMountAdmitted } =
   await import('@/components/browser-pane/host-guest/browser-page-mount-admission')
-const { collectBrowserWebviewIds, destroyRemovedBrowserWebview } =
+const { destroyWebviewsRemovedFromStore, destroyWorktreeBrowserGuests } =
   await import('./browser-webview-cleanup')
 
 const WT = 'repo1::/path/wt1'
@@ -52,16 +51,11 @@ function sweepRemovedPages(
   previous: ReadonlySet<string>
 ): Set<string> {
   const state = store.getState()
-  const current = collectBrowserWebviewIds(
+  return destroyWebviewsRemovedFromStore(
+    previous,
     state.browserTabsByWorktree,
     state.browserPagesByWorkspace
   )
-  for (const id of previous) {
-    if (!current.has(id)) {
-      destroyRemovedBrowserWebview(id)
-    }
-  }
-  return current
 }
 
 function openBackgroundTabs(store: ReturnType<typeof createTestStore>, count: number): string[] {
@@ -93,6 +87,17 @@ describe('browser page mount admission ends when the page leaves the store', () 
     sweepRemovedPages(store, before)
 
     expect(admittedCount(pageIds)).toBe(0)
+  })
+
+  it('ends when the guest is evicted, though the page stays in the store', () => {
+    const store = storeWithWorktree()
+    const pageIds = openBackgroundTabs(store, 3)
+    const state = store.getState()
+
+    destroyWorktreeBrowserGuests(state.browserTabsByWorktree, state.browserPagesByWorkspace, WT)
+
+    expect(admittedCount(pageIds)).toBe(0)
+    expect(Object.values(store.getState().browserPagesByWorkspace).flat()).toHaveLength(3)
   })
 
   it('ends when the tab or the page is closed', () => {
