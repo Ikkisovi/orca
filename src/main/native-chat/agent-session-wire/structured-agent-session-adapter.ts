@@ -103,22 +103,17 @@ export {
   AgentSessionAcquisitionRootExitObservedError
 } from './structured-agent-session-acquisition-errors'
 
-/** What a reservation turns into once something is actually running under it:
- *  the process the host can probe, and the provider handle it was minted with. */
+/** What a reservation turns into once a process is running under it. Every acquire answers as
+ *  soon as its process exists, before any handshake: the host publishes the child `starting` and
+ *  hands it nothing until its `started` event. */
 export type AgentSessionAcquisition = {
   process: AgentSessionProcessIdentity
+  /** Only a handle the adapter already holds at spawn (one Orca chose itself); a handle the
+   *  provider answers with comes on `started`, never made up here. */
   link?: AgentSessionProviderHandleLink
   /** Host-local identity for this exact provider child, distinct even when the durable fence is
    *  reused by a superseding acquisition. */
   acquisitionGeneration?: string
-  /** `starting`: published at spawn, proven later by a `started` event. Absent means `ready`, an
-   *  acquire that ran the whole handshake before answering; that bridge ends once every adapter
-   *  publishes at spawn. Either way the host holds input until the child is `ready`. */
-  providerChildPhase?: StructuredAgentSessionProviderChildPhase
-  /** What a `ready` child listed at its start, with the configured default its start resolved;
-   *  the host saves it once. A `starting` child (Claude) hands its listing on `started` and its
-   *  resolved default on the settings readback's `options-reported`. */
-  catalogListing?: AgentModelCatalogLiveListing
 }
 
 /** A refusal before spawn that a person can act on; the site that refused names it. */
@@ -409,11 +404,6 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   setOption(
     input: StructuredAgentSessionSetOptionInput
   ): Promise<void | Readonly<Record<string, string>>>
-  /** Resolves once a live session can take an option write, or after a bound; never rejects. */
-  awaitOptionWritable?(sessionId: string): Promise<void>
-  /** False while the live child has not answered its start, so it has run nothing it was handed.
-   *  Absent or undefined reads as answered. */
-  startAnswered?(sessionId: string): boolean | undefined
   /** Fetch off the lane, then apply the result under the same child's fence. */
   prepareReadOptions?(input: {
     sessionId: string
@@ -423,17 +413,6 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     sessionId: string
     fence: number
   }): Promise<StructuredAgentSessionLiveOptions>
-  /** Effective options already known after acquisition, without discovering picker choices. */
-  readAcquisitionOptions?(input: {
-    sessionId: string
-    fence: number
-    priorOptions?: Readonly<Record<string, string>>
-  }):
-    | Promise<Readonly<Record<string, string>> | undefined>
-    | Readonly<Record<string, string>>
-    | undefined
-  /** Option keys skipped after a provider rejected their persisted restore value. */
-  readOptionRestoreFailures?(sessionId: string): readonly string[]
   /** Provider history for restart reconciliation, bounded to what the provider
    *  recorded after the journal's last committed item. Only the adapter can say
    *  whether the read has a proven start and whether a turn is still running, so
