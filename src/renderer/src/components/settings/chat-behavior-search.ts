@@ -10,11 +10,11 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
   resumeOnRestart: {
     targetSectionId: NATIVE_CHAT_RESUME_SETTING_SECTION_ID,
     title: translate(
-      'components.settings.nativeChat.resumeTitle',
+      'auto.components.settings.ExperimentalPane.nativeChat.resumeTitle',
       'Resume working chats automatically after a restart'
     ),
     description: translate(
-      'components.settings.nativeChat.resumeCopy',
+      'auto.components.settings.ExperimentalPane.nativeChat.resumeCopy',
       'When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.'
     ),
     keywords: [
@@ -36,9 +36,12 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
   },
   shellEnvironment: {
     targetSectionId: 'chat-shell-environment',
-    title: translate('components.settings.nativeChat.shellEnvTitle', 'Use your shell environment'),
+    title: translate(
+      'auto.components.settings.ExperimentalPane.nativeChat.shellEnvTitle',
+      'Use your shell environment'
+    ),
     description: translate(
-      'components.settings.nativeChat.shellEnvCopy',
+      'auto.components.settings.ExperimentalPane.nativeChat.shellEnvCopy',
       'Codex and Claude chats start with every variable your login shell exports, the same as a terminal. Turn off to choose which ones they get.'
     ),
     keywords: [
@@ -50,5 +53,5 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
 }))
 
 export function getChatBehaviorSearchEntries(): SettingsSearchEntry[] {
-  return Object.values(getChatBehaviorEntriesByKey())
+  return [{ title: getChatBehaviorTitle() }, ...Object.values(getChatBehaviorEntriesByKey())]
 }

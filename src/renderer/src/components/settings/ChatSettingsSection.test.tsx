@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -11,10 +11,13 @@ import { getChatInlineVisualsSearchEntry } from './chat-inline-visuals-search'
 import { getChatBehaviorSearchEntries } from './chat-behavior-search'
 import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { useStructuredAgentSessionHostQueuesMessages } from '@/runtime/structured-agent-session-host-capability'
+import { i18n } from '@/i18n/i18n'
 import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { buildCmdJSettingsResults } from '../cmd-j/palette-results'
 import { isSettingsNavigationTarget } from '@/lib/settings-navigation-types'
 import { getSettingsSectionId, getSettingsScrollTarget } from './settings-navigation-foundations'
+import { getSettingsSectionSearchEntries, matchesSettingsSearch } from './settings-search'
 
 const state = vi.hoisted((): { settingsSearchQuery: string; settings: GlobalSettings | null } => ({
   settingsSearchQuery: '',
@@ -26,18 +29,24 @@ vi.mock('../../store', () => ({
   })
 }))
 
-afterEach(cleanup)
+afterEach(async () => {
+  cleanup()
+  setLocalRuntimeCapabilitiesForTests(null)
+  await i18n.changeLanguage('en')
+})
 beforeEach(() => {
   state.settingsSearchQuery = ''
   state.settings = null
+  setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
 })
 
 function renderChat(
   enabled: boolean | undefined,
   showDesktopOnlySettings = true,
-  hasUnsavedChatPromptChanges = false
+  hasUnsavedChatPromptChanges = false,
+  overrides: Partial<GlobalSettings> = {}
 ) {
-  const settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: enabled }
+  const settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: enabled, ...overrides }
   state.settings = settings
   const updateSettings = vi.fn(async (updates: Partial<GlobalSettings>) => {
     if (state.settings) {
@@ -165,6 +174,7 @@ describe('Chat settings page', () => {
       isWindows: false,
       isWebClient: false,
       nativeChatEnabled: true,
+      hostQueuesMessages: true,
       repos: []
     })
     const results = buildCmdJSettingsResults(sections).filter(
@@ -174,19 +184,99 @@ describe('Chat settings page', () => {
     expect(results[0]?.sectionId).toBe('chat')
   })
 
-  it('hides the Behavior group when its only match is a switch this host does not offer', () => {
-    setLocalRuntimeCapabilitiesForTests([])
-    state.settingsSearchQuery = 'queue'
-    const { container } = renderChat(true)
-    expect(container.querySelector('#chat-behavior')).toBeNull()
-    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
-    cleanup()
-    renderChat(true)
-    expect(screen.getByRole('switch', { name: 'Toggle queue follow-ups' })).toBeTruthy()
+  it.each([false, true])(
+    'keeps queue search and palette targets aligned with local support %s',
+    (supported) => {
+      setLocalRuntimeCapabilitiesForTests(
+        supported ? [AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY] : []
+      )
+      const { result } = renderHook(() =>
+        useStructuredAgentSessionHostQueuesMessages({ kind: 'local' })
+      )
+      const hostQueuesMessages = result.current
+      const sections = buildSettingsNavigationMetadata({
+        isMac: true,
+        isWindows: false,
+        isWebClient: false,
+        nativeChatEnabled: true,
+        hostQueuesMessages,
+        repos: []
+      })
+      const chat = sections.find((section) => section.id === 'chat')
+      const queueEntry = chat?.searchEntries.find(
+        (entry) => entry.targetSectionId === 'chat-queue-follow-ups'
+      )
+      const queueResult = buildCmdJSettingsResults(sections).find(
+        (entry) => entry.targetSectionId === 'chat-queue-follow-ups'
+      )
+      state.settingsSearchQuery = 'queue'
+      const { container } = renderChat(true)
+      expect(chat && matchesSettingsSearch('queue', getSettingsSectionSearchEntries(chat))).toBe(
+        hostQueuesMessages
+      )
+      expect(Boolean(queueEntry)).toBe(hostQueuesMessages)
+      expect(Boolean(queueResult)).toBe(hostQueuesMessages)
+      expect(Boolean(container.querySelector('#chat-queue-follow-ups'))).toBe(hostQueuesMessages)
+      expect(Boolean(container.querySelector('#chat-behavior'))).toBe(hostQueuesMessages)
+      if (hostQueuesMessages) {
+        expect(queueResult?.sectionId).toBe('chat')
+        expect(getSettingsScrollTarget(queueResult?.targetSectionId ?? '', container)).toBe(
+          container.querySelector('#chat-queue-follow-ups')
+        )
+        expect(screen.getByRole('switch', { name: 'Toggle queue follow-ups' })).toBeTruthy()
+      }
+    }
+  )
+
+  it('uses the existing French translations for moved Behavior controls', async () => {
+    await i18n.changeLanguage('fr')
+    const { container } = renderChat(true, true, false, {
+      nativeChatInheritShellEnvironment: false,
+      nativeChatShellEnvironmentVariables: ['FOO']
+    })
     expect(
-      screen.queryByRole('switch', { name: 'Toggle automatic resume after a restart' })
-    ).toBeNull()
-    setLocalRuntimeCapabilitiesForTests(null)
+      screen.getByRole('switch', { name: 'Activer la reprise automatique après un redémarrage' })
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('switch', {
+        name: "Activer l'utilisation de l'environnement de votre shell"
+      })
+    ).toBeTruthy()
+    expect(screen.getByText('Variables à transmettre depuis votre shell')).toBeTruthy()
+    expect(screen.getByPlaceholderText('Nom de la variable')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Ajouter' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Supprimer FOO' })).toBeTruthy()
+    expect(screen.getByText(/PATH, les paramètres régionaux et SSH_AUTH_SOCK/)).toBeTruthy()
+    expect(container.querySelector('#chat-behavior')?.textContent).toContain(
+      'Reprendre automatiquement les discussions de travail après un redémarrage'
+    )
+    expect(container.querySelector('#chat-behavior')?.textContent).toContain(
+      'Les chats Codex et Claude démarrent avec toutes les variables exportées'
+    )
+  })
+
+  it('indexes the Behavior heading without adding a palette row for it', () => {
+    state.settingsSearchQuery = 'Behavior'
+    const { container } = renderChat(true)
+    const sections = buildSettingsNavigationMetadata({
+      isMac: true,
+      isWindows: false,
+      isWebClient: false,
+      nativeChatEnabled: true,
+      repos: []
+    })
+    const chat = sections.find((section) => section.id === 'chat')
+    expect(chat?.searchEntries.some((entry) => entry.title === 'Behavior')).toBe(true)
+    expect(chat && matchesSettingsSearch('Behavior', getSettingsSectionSearchEntries(chat))).toBe(
+      true
+    )
+    expect(container.querySelector('#chat-behavior')).toBeTruthy()
+    expect(
+      screen.getByRole('switch', { name: 'Toggle automatic resume after a restart' })
+    ).toBeTruthy()
+    const results = buildCmdJSettingsResults(sections).filter((entry) => entry.sectionId === 'chat')
+    expect(results.find((entry) => !entry.targetSectionId)?.configKeywords).toContain('behavior')
+    expect(results.some((entry) => entry.targetSectionId && entry.title === 'Behavior')).toBe(false)
   })
 
   it('unmounts the page when the opt-in is disabled while it is selected', () => {

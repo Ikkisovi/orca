@@ -56,7 +56,7 @@ export function ChatBehaviorSetting({
                 description={entries.resumeOnRestart.description}
                 checked={resumeOnRestartEnabled}
                 ariaLabel={translate(
-                  'components.settings.nativeChat.resumeToggleLabel',
+                  'auto.components.settings.ExperimentalPane.nativeChat.resumeToggleLabel',
                   'Toggle automatic resume after a restart'
                 )}
                 onChange={() =>
