@@ -84,6 +84,7 @@ describe('MobileNativeChatMessage', () => {
       } | null
       onToggleTurn?: () => void
       reasoningIsLive?: boolean
+      unsentNotice?: string
     } = {}
   ): ReactTestRenderer {
     act(() => {
@@ -166,6 +167,40 @@ describe('MobileNativeChatMessage', () => {
       (node) => String(node.type) === 'View' && Array.isArray(node.props.style)
     )
     expect(rows.some((row) => row.props.style.includes(styles.rowUser))).toBe(false)
+  })
+
+  describe('a message the host recorded and did not deliver', () => {
+    const notSent = { ...userMessage([{ type: 'text', text: 'fix it' }]), unsent: true as const }
+    const lineIn = (tree: ReactTestRenderer) =>
+      tree.root.findAll(
+        (node) => String(node.type) === 'Text' && node.props.style === styles.unsentNotice
+      )
+
+    it('says why under the bubble, and that it was not sent when no reason is known', () => {
+      expect(textIn(render(notSent, { unsentNotice: 'Claude is not signed in.' }).root)).toEqual([
+        'fix it',
+        'Claude is not signed in.'
+      ])
+      expect(textIn(render(notSent).root).at(-1)).toBe('Your message was not sent.')
+    })
+
+    it("draws the line under another agent's message too, and never under a delivered one", () => {
+      const fromAgent: NativeChatMessage = {
+        ...notSent,
+        from: {
+          kind: 'agent',
+          senders: [
+            {
+              party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+              name: 'Coder'
+            }
+          ],
+          orchestration: null
+        }
+      }
+      expect(lineIn(render(fromAgent))).toHaveLength(1)
+      expect(lineIn(render(userMessage([{ type: 'text', text: 'fix it' }])))).toHaveLength(0)
+    })
   })
 
   it('preserves an ordinary assistant answer without interpreting its text as a host notice', () => {
