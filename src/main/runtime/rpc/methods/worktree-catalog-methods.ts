@@ -1,5 +1,6 @@
 import { defineMethod } from '../core'
 import { resolveWorktreeCatalogSnapshot } from '../worktree-catalog-snapshot'
+import { coarsenWorktreePsActivity } from '../worktree-ps-coarse-activity'
 import { supportsWorktreeVisibilitySourceDefaults } from '../worktree-visibility-client-capability'
 import {
   projectWorktreeListRemovals,
@@ -30,10 +31,12 @@ export const WORKTREE_CATALOG_METHODS = [
         context,
         pendingAtScan
       )
+      // Why: hashed after coarsening, so the snapshot id holds while only chunk-level activity moves.
+      const catalog = params.coarseActivity ? coarsenWorktreePsActivity(result) : result
       // Why: callers that never send the field get the byte-exact legacy response.
       return params.afterSnapshotId === undefined
-        ? result
-        : resolveWorktreeCatalogSnapshot(result, params.afterSnapshotId)
+        ? catalog
+        : resolveWorktreeCatalogSnapshot(catalog, params.afterSnapshotId)
     }
   }),
   defineMethod({

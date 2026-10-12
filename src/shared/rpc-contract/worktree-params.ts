@@ -72,7 +72,9 @@ export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams
 export const WorktreePsParams = z.object({
   limit: OptionalFiniteNumber,
   afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
-  supportsWorktreeVisibilitySourceDefaults: z.literal(true).optional()
+  supportsWorktreeVisibilitySourceDefaults: z.literal(true).optional(),
+  /** Drop per-chunk activity detail so a polling client's snapshot id survives terminal output. */
+  coarseActivity: z.literal(true).optional()
 })
 
 export const WorktreeSortOrder = z.object({

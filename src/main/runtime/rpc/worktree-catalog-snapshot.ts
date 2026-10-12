@@ -1,16 +1,19 @@
 import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import type {
-  RuntimeWorktreePsConditionalResult,
-  RuntimeWorktreePsResult
+  RuntimeWorktreePsResult,
+  RuntimeWorktreePsUnchangedResult
 } from '../../../shared/runtime-types'
+import type { RuntimeWorktreePsCoarseResult } from './worktree-ps-coarse-activity'
 
 // Why: 192 bits of a sha256 over the serialized catalog. Accidental collision is
 // impossible at any realistic poll rate, and this is not an auth boundary.
 const SNAPSHOT_ID_LENGTH = 32
 
+type WorktreeCatalog = RuntimeWorktreePsResult | RuntimeWorktreePsCoarseResult
+
 type MemoizedCatalogId = {
-  result: RuntimeWorktreePsResult
+  result: WorktreeCatalog
   snapshotId: string
 }
 
@@ -20,7 +23,7 @@ type MemoizedCatalogId = {
 // or per-caller isolation. Serializing every poll instead would cost ~3x the compare.
 let memoizedId: MemoizedCatalogId | null = null
 
-function worktreeCatalogSnapshotId(result: RuntimeWorktreePsResult): string {
+function worktreeCatalogSnapshotId(result: WorktreeCatalog): string {
   if (memoizedId && isDeepStrictEqual(memoizedId.result, result)) {
     return memoizedId.snapshotId
   }
@@ -30,7 +33,8 @@ function worktreeCatalogSnapshotId(result: RuntimeWorktreePsResult): string {
     .digest('base64url')
     .slice(0, SNAPSHOT_ID_LENGTH)
   // Why: caller-owned mutation must not let an old id label new catalog content.
-  memoizedId = { result: JSON.parse(serialized) as RuntimeWorktreePsResult, snapshotId }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: parses the JSON of a WorktreeCatalog.
+  memoizedId = { result: JSON.parse(serialized) as WorktreeCatalog, snapshotId }
   return snapshotId
 }
 
@@ -38,10 +42,10 @@ function worktreeCatalogSnapshotId(result: RuntimeWorktreePsResult): string {
 // id. Any number of concurrent clients, any `limit`, and any runtime restart stay correct
 // by construction: ids match only when the catalogs are byte-identical, which is exactly
 // when `unchanged` is the right answer.
-export function resolveWorktreeCatalogSnapshot(
-  result: RuntimeWorktreePsResult,
+export function resolveWorktreeCatalogSnapshot<T extends WorktreeCatalog>(
+  result: T,
   afterSnapshotId: string | null
-): RuntimeWorktreePsConditionalResult {
+): (T & { snapshotId: string }) | RuntimeWorktreePsUnchangedResult {
   const snapshotId = worktreeCatalogSnapshotId(result)
   if (afterSnapshotId === snapshotId) {
     return { unchanged: true, snapshotId }
