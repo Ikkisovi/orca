@@ -232,26 +232,16 @@ describe('a launch the window pane starts', () => {
     })
   })
 
-  it('still starts a "+" when the ledger cannot admit it: the click never waits on bookkeeping', async () => {
-    setAgentLaunchRecordStore(null)
-    const runtime = host()
-
-    const result = await launch(runtime, { wslShellRule: 'window' })
-
-    expect(result.outcome).toEqual({ kind: 'pane', paneKey: PANE_KEY })
-    expect((await planned(runtime)).plan).toMatchObject({ command: 'claude' })
-    // Only a window pane's launch: any other launch is still refused without its record.
-    await expect(
-      launch(runtime, { spawnTrigger: undefined, operationId: `${Date.now()}-${'f'.repeat(32)}` })
-    ).rejects.toThrow('agent_session_record_store_unavailable')
-  })
-
-  it("refuses an AI button's launch when the ledger cannot admit it, as before", async () => {
-    setAgentLaunchRecordStore(null)
-    const runtime = host()
-    await expect(launch(runtime)).rejects.toThrow('agent_session_record_store_unavailable')
-    expect(runtime.planPaneAgentTerminal).not.toHaveBeenCalled()
-  })
+  // TEMPORARY parity (follow-up 3): as before; a refused "+" then runs the window's own launch.
+  it.each([{}, { wslShellRule: 'window' }])(
+    'refuses a launch the ledger cannot admit, as before (%o)',
+    async (rules) => {
+      setAgentLaunchRecordStore(null)
+      const runtime = host()
+      await expect(launch(runtime, rules)).rejects.toThrow('agent_session_record_store_unavailable')
+      expect(runtime.planPaneAgentTerminal).not.toHaveBeenCalled()
+    }
+  )
 
   it('is refused from any caller but this desktop window', async () => {
     const runtime = host()
