@@ -95,31 +95,6 @@ function clientWithResults(...results: unknown[]): RpcClient {
 }
 
 describe('WorktreeCatalogSnapshotClient', () => {
-  it('asks the host to leave per-chunk activity out of the snapshot', async () => {
-    const client = clientWithResults({ worktrees: [], snapshotId: 'snapshot-1' })
-
-    await new WorktreeCatalogSnapshotClient().fetch(client, 'host-1')
-
-    expect(client.sendRequest).toHaveBeenCalledWith('worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: null,
-      coarseActivity: true
-    })
-  })
-
-  it('admits rows from coarse hosts without a preview and from old hosts with one', async () => {
-    const coarseRows = [{ worktreeId: 'worktree-1', lastOutputAt: 30_000 }]
-    const oldHostRows = [{ worktreeId: 'worktree-1', lastOutputAt: 31_234, preview: '$ codex' }]
-    const client = clientWithResults(
-      { worktrees: coarseRows, snapshotId: 'snapshot-1' },
-      { worktrees: oldHostRows }
-    )
-    const snapshots = new WorktreeCatalogSnapshotClient()
-
-    expect(admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))).toEqual(coarseRows)
-    expect(admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))).toEqual(oldHostRows)
-  })
-
   it('returns the confirmed rows on unchanged responses so callers can reassert them', async () => {
     const rows = [{ worktreeId: 'worktree-1' }]
     const client = clientWithResults(
@@ -147,8 +122,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
 
     expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
       limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: null,
-      coarseActivity: true
+      afterSnapshotId: null
     })
   })
 
@@ -168,8 +142,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
 
     expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
       limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: 'snapshot-1',
-      coarseActivity: true
+      afterSnapshotId: 'snapshot-1'
     })
   })
 
@@ -187,8 +160,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
 
     expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
       limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: null,
-      coarseActivity: true
+      afterSnapshotId: null
     })
   })
 
@@ -202,8 +174,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
 
     expect(secondClient.sendRequest).toHaveBeenCalledWith('worktree.ps', {
       limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: null,
-      coarseActivity: true
+      afterSnapshotId: null
     })
   })
 
@@ -223,8 +194,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
     await snapshots.fetch(secondClient, 'host-2')
     expect(secondClient.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
       limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: 'snapshot-2',
-      coarseActivity: true
+      afterSnapshotId: 'snapshot-2'
     })
   })
 
@@ -248,8 +218,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
     await snapshots.fetch(client, 'host-1')
     expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
       limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: 'snapshot-1',
-      coarseActivity: true
+      afterSnapshotId: 'snapshot-1'
     })
   })
 

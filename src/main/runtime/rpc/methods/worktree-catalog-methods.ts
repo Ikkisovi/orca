@@ -31,12 +31,15 @@ export const WORKTREE_CATALOG_METHODS = [
         context,
         pendingAtScan
       )
-      // Why: hashed after coarsening, so the snapshot id holds while only chunk-level activity moves.
-      const catalog = params.coarseActivity ? coarsenWorktreePsActivity(result) : result
       // Why: callers that never send the field get the byte-exact legacy response.
-      return params.afterSnapshotId === undefined
-        ? catalog
-        : resolveWorktreeCatalogSnapshot(catalog, params.afterSnapshotId)
+      if (params.afterSnapshotId === undefined) {
+        return result
+      }
+      // Why: snapshot pollers get activity at poll-friendly granularity so the id survives terminal output.
+      return resolveWorktreeCatalogSnapshot(
+        coarsenWorktreePsActivity(result),
+        params.afterSnapshotId
+      )
     }
   }),
   defineMethod({

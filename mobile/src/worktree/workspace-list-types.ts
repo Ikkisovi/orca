@@ -40,8 +40,6 @@ export type Worktree = {
   isLastLineageChild?: boolean
   liveTerminalCount: number
   hasAttachedPty: boolean
-  /** Absent from hosts answering a `coarseActivity` poll; older hosts still send it. */
-  preview?: string
   unread: boolean
   lastOutputAt?: number
   isPinned: boolean

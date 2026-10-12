@@ -7959,8 +7959,7 @@
           "params": {
             "limit": 10000,
             "supportsWorktreeVisibilitySourceDefaults": true,
-            "afterSnapshotId": null,
-            "coarseActivity": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -8000,8 +7999,7 @@
           "params": {
             "limit": 10000,
             "supportsWorktreeVisibilitySourceDefaults": true,
-            "afterSnapshotId": null,
-            "coarseActivity": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true

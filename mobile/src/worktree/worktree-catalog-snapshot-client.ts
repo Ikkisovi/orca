@@ -74,9 +74,7 @@ export class WorktreeCatalogSnapshotClient {
     const requestedSnapshotId = this.snapshotId
     const reply = await worktreeCatalogRead.request(client, {
       limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: requestedSnapshotId,
-      // Why: without it every terminal chunk changes the snapshot id and resends the catalog.
-      coarseActivity: true
+      afterSnapshotId: requestedSnapshotId
     })
     const catalog = worktreeCatalogRead.interpret(reply)
     if (!catalog.accepted) {

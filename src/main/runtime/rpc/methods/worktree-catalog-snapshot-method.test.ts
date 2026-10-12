@@ -153,7 +153,7 @@ async function poll(
   return { ...response.result }
 }
 
-describe('worktree.ps coarse activity', () => {
+describe('worktree.ps snapshot polls', () => {
   // Same 30 s bucket, different chunk: only the per-chunk activity fields moved.
   const before = psRow({ lastOutputAt: 1_700_000_031_000, preview: 'step 1' })
   const after = psRow({ lastOutputAt: 1_700_000_039_000, preview: 'step 2' })
@@ -163,19 +163,10 @@ describe('worktree.ps coarse activity', () => {
       runtime: makeRuntime(before, after),
       methods: WORKTREE_METHODS
     })
-    const first = await poll(dispatcher, {
-      limit: 10_000,
-      afterSnapshotId: null,
-      coarseActivity: true
-    })
-    const second = await poll(dispatcher, {
-      limit: 10_000,
-      afterSnapshotId: first.snapshotId,
-      coarseActivity: true
-    })
+    const first = await poll(dispatcher, { limit: 10_000, afterSnapshotId: null })
+    const second = await poll(dispatcher, { limit: 10_000, afterSnapshotId: first.snapshotId })
 
-    const { preview: _preview, ...coarseRow } = before
-    expect(first.worktrees).toEqual([{ ...coarseRow, lastOutputAt: 1_700_000_010_000 }])
+    expect(first.worktrees).toEqual([{ ...before, preview: '', lastOutputAt: 1_700_000_010_000 }])
     expect(second).toEqual({ unchanged: true, snapshotId: first.snapshotId })
   })
 
@@ -184,44 +175,11 @@ describe('worktree.ps coarse activity', () => {
       runtime: makeRuntime(before, psRow({ lastOutputAt: 1_700_000_071_000 })),
       methods: WORKTREE_METHODS
     })
-    const first = await poll(dispatcher, {
-      limit: 10_000,
-      afterSnapshotId: null,
-      coarseActivity: true
-    })
-    const second = await poll(dispatcher, {
-      limit: 10_000,
-      afterSnapshotId: first.snapshotId,
-      coarseActivity: true
-    })
-
-    expect(second.snapshotId).not.toBe(first.snapshotId)
-    expect(second.worktrees).toEqual([expect.objectContaining({ lastOutputAt: 1_700_000_070_000 })])
-  })
-
-  it('changes the snapshot id on every chunk without the param', async () => {
-    const dispatcher = new RpcDispatcher({
-      runtime: makeRuntime(before, after),
-      methods: WORKTREE_METHODS
-    })
     const first = await poll(dispatcher, { limit: 10_000, afterSnapshotId: null })
     const second = await poll(dispatcher, { limit: 10_000, afterSnapshotId: first.snapshotId })
 
     expect(second.snapshotId).not.toBe(first.snapshotId)
-    expect(second.worktrees).toEqual([after])
-  })
-
-  it('returns rows untouched to callers without the param', async () => {
-    const dispatcher = new RpcDispatcher({
-      runtime: makeRuntime(before),
-      methods: WORKTREE_METHODS
-    })
-
-    expect(await poll(dispatcher, { limit: 10_000 })).toEqual({
-      worktrees: [before],
-      totalCount: 1,
-      truncated: false
-    })
+    expect(second.worktrees).toEqual([expect.objectContaining({ lastOutputAt: 1_700_000_070_000 })])
   })
 
   it('keeps a null lastOutputAt null', async () => {
@@ -229,8 +187,19 @@ describe('worktree.ps coarse activity', () => {
       runtime: makeRuntime(psRow({ lastOutputAt: null, preview: '' })),
       methods: WORKTREE_METHODS
     })
-    const result = await poll(dispatcher, { limit: 10_000, coarseActivity: true })
+    const result = await poll(dispatcher, { limit: 10_000, afterSnapshotId: null })
 
     expect(result.worktrees).toEqual([expect.objectContaining({ lastOutputAt: null })])
+  })
+
+  it('returns byte-identical rows, preview included, to callers that do not poll snapshots', async () => {
+    const dispatcher = new RpcDispatcher({
+      runtime: makeRuntime(before),
+      methods: WORKTREE_METHODS
+    })
+
+    expect(JSON.stringify(await poll(dispatcher, { limit: 10_000 }))).toBe(
+      JSON.stringify({ worktrees: [before], totalCount: 1, truncated: false })
+    )
   })
 })

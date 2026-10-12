@@ -44,7 +44,6 @@ function areWorktreesEqual(left: Worktree, right: Worktree): boolean {
     areStringArraysEqual(left.childWorktreeIds ?? [], right.childWorktreeIds ?? []) &&
     left.liveTerminalCount === right.liveTerminalCount &&
     left.hasAttachedPty === right.hasAttachedPty &&
-    left.preview === right.preview &&
     left.unread === right.unread &&
     (left.lastOutputAt ?? null) === (right.lastOutputAt ?? null) &&
     left.isPinned === right.isPinned &&

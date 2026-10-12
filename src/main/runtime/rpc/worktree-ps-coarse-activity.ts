@@ -1,26 +1,17 @@
-import type {
-  RuntimeWorktreePsResult,
-  RuntimeWorktreePsSummary
-} from '../../../shared/runtime-types'
+import type { RuntimeWorktreePsResult } from '../../../shared/runtime-types'
 
-// Why: mobile reads lastOutputAt only to rank "recent" rows and pick a resume fallback, so only
-// rows whose activity lies within 30 s of each other can trade places.
-export const COARSE_LAST_OUTPUT_AT_MS = 30_000
+// Why: mobile reads lastOutputAt only to rank rows; a 30 s floor bounds activity-driven resends to one per bucket.
+const COARSE_LAST_OUTPUT_AT_MS = 30_000
 
-export type RuntimeWorktreePsCoarseSummary = Omit<RuntimeWorktreePsSummary, 'preview'>
-
-export type RuntimeWorktreePsCoarseResult = Omit<RuntimeWorktreePsResult, 'worktrees'> & {
-  worktrees: RuntimeWorktreePsCoarseSummary[]
-}
-
-/** Strips what moves on every PTY chunk: `preview` (never shown on mobile) and sub-bucket timing. */
+/** Blanks what moves on every PTY chunk: `preview` and sub-bucket `lastOutputAt`. */
 export function coarsenWorktreePsActivity(
   result: RuntimeWorktreePsResult
-): RuntimeWorktreePsCoarseResult {
+): RuntimeWorktreePsResult {
   return {
     ...result,
-    worktrees: result.worktrees.map(({ preview: _preview, ...row }) => ({
+    worktrees: result.worktrees.map((row) => ({
       ...row,
+      preview: '',
       lastOutputAt:
         row.lastOutputAt === null
           ? null
