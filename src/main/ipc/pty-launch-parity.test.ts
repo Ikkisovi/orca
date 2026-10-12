@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { classifyErrorMock, trackMock } from './pty-ipc-mock-registry'
+import { classifyErrorMock, statSyncMock, trackMock } from './pty-ipc-mock-registry'
 import {
   providerFacts,
   recordOf,
@@ -384,6 +384,19 @@ describe('pane-trigger lane: window launch -> host plan -> pane spawn -> provide
     } finally {
       paneSpawnReservationsByOwnerKey.delete(key)
     }
+  })
+
+  it("spawns an AI button's missing folder as before, never the workspace root", async () => {
+    const plus = PANE_TRIGGER_CASES.find((entry) => entry.name === 'menu "+", macOS repo')!
+    setMainPlatform('darwin')
+    const lanes = startParityLanes(suite, { workspace: plus.workspace, settings: plus.settings })
+    const { promptCarry: _carry, wslShellRule: _rule, ...aiButton } = paneLaunchParams(plus)
+    await launchIntoPane(lanes, aiButton)
+    const gone = `${plus.workspace.path}/deleted`
+    statSyncMock.mockImplementation((target: string) => ({ isDirectory: () => target !== gone }))
+    await lanes.spawnWindow({ ...windowSpawnRequest(plus), cwd: gone })
+
+    expect(await providerFacts(lanes.provider)).toMatchObject({ cwd: gone })
   })
 
   // The launch most likely to break: the floating sentinel has no repo or folder behind it.

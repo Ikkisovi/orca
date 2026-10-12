@@ -15,6 +15,8 @@ export function applyAgentLaunchPanePlan(ctx: PtyIpcSpawnState, launch: AgentLau
       'launchAgent',
       'startupCommandDelivery',
       'telemetry'
-    ])
+    ]),
+    // TEMPORARY parity (follow-up 2): an AI button's missing folder fails as before C2, never the root.
+    ...(plan.wslShellRule === 'window' ? {} : { cwdFallback: undefined })
   })
 }
