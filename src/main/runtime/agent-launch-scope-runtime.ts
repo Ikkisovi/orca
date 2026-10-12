@@ -63,8 +63,8 @@ export function agentLaunchProjectRuntime(
     wslShellRule === 'host' && !resolveLocalProjectRuntimeForWorktreeId(store, scope.id)
   const pathDecides =
     // PERMANENT fix, not parity: a `\\wsl$` cwd runs in WSL whatever the setting says. Keep it
-    // when the temporary terms go; a window tab's own launch keeps it too.
-    (onWindowsHost && isWslUncPath(scope.path)) ||
+    // when the temporary terms go. TEMPORARY parity (follow-up 5): not yet for a window tab's own launch.
+    (onWindowsHost && wslShellRule === 'host' && isWslUncPath(scope.path)) ||
     // TEMPORARY (STA-10231): an explicit Windows host can't be told from the shipped default.
     (onWindowsHost && mainHadNone) ||
     // TEMPORARY (STA-10251): OpenCode models can't yet be verified inside WSL.

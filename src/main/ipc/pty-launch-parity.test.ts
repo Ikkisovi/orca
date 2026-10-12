@@ -333,12 +333,13 @@ describe('pane-trigger lane: window launch -> host plan -> pane spawn -> provide
         telemetry: undefined
       })
 
-      const facts = await providerFacts(lanes.provider)
       // Both real providers run a `\\wsl$` cwd in wsl.exe whatever shell is asked for
       // (local-pty-launch-plan.ts, daemon shell-launch-plan.ts); this provider only records.
-      expect(
+      const ran = (facts: Record<string, unknown>) =>
         isWslUncPath(String(request.cwd)) ? { ...facts, shellOverride: 'wsl.exe' } : facts
-      ).toEqual(expectedWindowProvider(request, c.provider, c.request.agentEnv ?? {}))
+      expect(ran(await providerFacts(lanes.provider))).toEqual(
+        ran(expectedWindowProvider(request, c.provider, c.request.agentEnv ?? {}))
+      )
       expect(trackMock.mock.calls).toEqual([['agent_started', request.telemetry]])
     }
   )

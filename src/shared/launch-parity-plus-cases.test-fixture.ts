@@ -1,6 +1,6 @@
 // Test-only (never imported by production code): the window-lane launch parity table for row 1, the
 // "+" launches C2 moves onto the pane trigger. One row per "+" entry point; local hosts only.
-import { POSIX_PATH, WIN_PATH } from './launch-parity-window-cases.test-fixture'
+import { POSIX_PATH, WIN_PATH, WSL_PATH } from './launch-parity-window-cases.test-fixture'
 import type {
   LaunchClient,
   LaunchWorkspace,
@@ -70,5 +70,18 @@ export const PLUS_LAUNCH_CASES: WindowLaunchCase[] = [
     },
     { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null },
     { terminalWindowsShell: 'wsl.exe' }
+  ),
+  // The window quotes a \\wsl$ repo saved as Windows host for PowerShell, though it runs in WSL.
+  plus(
+    'menu',
+    'Windows wsl$ repo, project Windows',
+    'win32',
+    { kind: 'repo', path: WSL_PATH, projectRuntime: { kind: 'windows-host' } },
+    {
+      ...quoted(ps),
+      shellOverride: 'powershell.exe',
+      projectRuntime: { kind: 'windows-host', reason: 'project-override' }
+    },
+    { shellOverride: 'powershell.exe', terminalWindowsWslDistro: 'Ubuntu' }
   )
 ]
