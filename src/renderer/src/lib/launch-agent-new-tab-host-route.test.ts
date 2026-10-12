@@ -83,6 +83,18 @@ describe('an AI button launched through the host', () => {
     expect(toast.error).toHaveBeenCalledOnce()
   })
 
+  it("says a refused runtime repair in the host's own sentence, the settings page's words", async () => {
+    const sentence =
+      'No agent was started. Ubuntu is not installed in WSL. Choose an installed distro or switch this project to Windows.'
+    deferredOutcome()({
+      kind: 'not-started',
+      code: 'project_runtime_repair_required',
+      message: sentence
+    })
+    await launch().promptDeliveryResult
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith(sentence, expect.anything())
+  })
+
   it('says nothing and pastes nothing when the user closed the tab', async () => {
     deferredOutcome()({ kind: 'closed-by-user' })
     await expect(launch().promptDeliveryResult).resolves.toEqual({

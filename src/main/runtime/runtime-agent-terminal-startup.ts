@@ -157,8 +157,7 @@ async function buildRuntimeAgentTerminalStartupOptions(
       isRemote,
       ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
       ...(opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : {}),
-      // Quoted for the shell the PTY really is. Seam (F2): the window quoted by the Terminal shell
-      // setting (`shell: undefined`), which mis-quotes a WSL setting on a Windows-host project.
+      // Quoted for the shell the PTY really is.
       shell: agentLaunchQuotingShell(runtime),
       sessionOptions: host.toSessionOptions(opts.launchPreferences)
     }),

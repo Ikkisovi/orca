@@ -55,7 +55,7 @@ export type HostAgentLaunchOutcome =
   /** The user closed the tab while it started, and with it the launch: nothing more to say. */
   | { kind: 'closed-by-user' }
   /** Nothing started; this window closed the tab and says why. */
-  | { kind: 'not-started'; code?: string }
+  | { kind: 'not-started'; code?: string; message?: string }
 
 function tabExists(worktreeId: string, tabId: string): boolean {
   return (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)
@@ -100,7 +100,8 @@ async function settleLaunch(
     await send
     return { kind: 'started' }
   } catch (error) {
-    const code = error instanceof RuntimeRpcCallError ? error.code : undefined
+    const refusal = error instanceof RuntimeRpcCallError ? error : null
+    const code = refusal?.code
     if (code === AGENT_LAUNCH_TAB_CLOSED_CODE) {
       return { kind: 'closed-by-user' }
     }
@@ -108,7 +109,10 @@ async function settleLaunch(
     if (tabExists(worktreeId, tabId)) {
       useAppStore.getState().closeTab(tabId, { recordInteraction: false })
     }
-    return { kind: 'not-started', ...(code ? { code } : {}) }
+    return {
+      kind: 'not-started',
+      ...(refusal ? { code: refusal.code, message: refusal.message } : {})
+    }
   } finally {
     releaseHold()
   }

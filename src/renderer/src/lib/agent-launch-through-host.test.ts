@@ -165,7 +165,7 @@ describe('a desktop launch through the host', () => {
 
     reply.reject(rpcError(code))
 
-    await expect(outcome).resolves.toEqual({ kind: 'not-started', code })
+    await expect(outcome).resolves.toEqual({ kind: 'not-started', code, message: code })
     unsubscribe()
     expect(launchTab(tabId)).toBeUndefined()
     expect(heldAtClose).toBe(true)

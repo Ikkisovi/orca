@@ -9,12 +9,16 @@ import {
   type HostAgentLaunchOutcome
 } from '@/lib/agent-launch-through-host'
 import { pasteAgentLaunchPromptOnceReady } from '@/lib/launch-agent-tab-prompt-paste'
+import { getAgentLabel } from '@/lib/agent-catalog'
+import { useAppStore } from '@/store'
+import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../shared/project-runtime-repair-message'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 /**
- * Whether a new agent tab starts through the host's `agent.launch`: an AI button's launch, whose
- * prompt is pasted once the agent is ready, in a terminal this window makes. Temporary: the window
- * keeps pasting the prompt as main does until the host delivers it. A typed prompt (`auto-submit`,
- * `draft`) keeps main's launch, and so does a launch the host could turn into a chat.
+ * Whether a new agent tab is an AI button's launch: by the host's rules, its prompt pasted once
+ * the agent is ready (temporary: until the host delivers it). A typed prompt (`auto-submit`,
+ * `draft`) keeps the window's rules, and a launch the host could turn into a chat keeps main's.
  */
 export function newTabPromptLaunchesThroughHost(args: {
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -25,8 +29,30 @@ export function newTabPromptLaunchesThroughHost(args: {
   )
 }
 
+/** Why the host refused, each reason in its one existing wording. */
+function notStartedText(outcome: { code?: string; message?: string }, agent: TuiAgent): string {
+  // The host words a runtime repair in the project settings page's own sentence.
+  if (outcome.code === PROJECT_RUNTIME_REPAIR_REQUIRED_CODE && outcome.message) {
+    return outcome.message
+  }
+  const notice = agentLaunchPaneNoticeText({ kind: 'not-started', code: outcome.code ?? '' })
+  if (isTuiAgentEnabled(agent, useAppStore.getState().settings?.disabledTuiAgents)) {
+    return notice
+  }
+  const disabled = translate(
+    'components.agentSessionContinuation.agentDisabled',
+    '{{agent}} is disabled in Agent settings.',
+    { agent: getAgentLabel(agent) }
+  )
+  return `${notice} ${disabled}`
+}
+
 /** The tab is gone, so the pane's own words go in a notice, with its prompt to copy. */
-function showLaunchNotStartedNotice(outcome: HostAgentLaunchOutcome, prompt: string): void {
+function showLaunchNotStartedNotice(
+  outcome: HostAgentLaunchOutcome,
+  prompt: string,
+  agent: TuiAgent
+): void {
   if (outcome.kind !== 'not-started') {
     return
   }
@@ -35,7 +61,7 @@ function showLaunchNotStartedNotice(outcome: HostAgentLaunchOutcome, prompt: str
     'Copy prompt'
   )
   toast.error(
-    agentLaunchPaneNoticeText({ kind: 'not-started', code: outcome.code ?? '' }),
+    notStartedText(outcome, agent),
     prompt
       ? { action: { label: copy, onClick: () => void window.api.ui.writeClipboardText(prompt) } }
       : {}
@@ -66,7 +92,7 @@ export function startNewTabPaneLaunch(
         }
       : {})
   })
-  void outcome.then((launched) => showLaunchNotStartedNotice(launched, args.prompt))
+  void outcome.then((launched) => showLaunchNotStartedNotice(launched, args.prompt, args.agent))
   return { id: tabId, initialLeafId: leafId, agentLaunchPane: { leafId } }
 }
 
@@ -110,7 +136,7 @@ export function launchNewTabPromptThroughHost(
       return pasted
     }
     // The pane, or this notice for a tab that went, already says why: never a second notice.
-    showLaunchNotStartedNotice(launched, args.prompt)
+    showLaunchNotStartedNotice(launched, args.prompt, args.agent)
     return { delivered: false, failureNotified: true }
   })
   return { tabId, promptDeliveryResult }

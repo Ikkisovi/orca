@@ -239,8 +239,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   if (beforeSurfaceOpen?.({ kind: 'local-terminal' }) === false) {
     return null
   }
-  // Seam (F1): only a pane that spawns on this machine starts from the host's plan; a relay-era SSH
-  // row's pane waits for its host's conversion, as every launch into it did.
+  // Only a pane that spawns on this machine starts from the host's plan; a relay-era SSH row's
+  // pane keeps its queued launch and waits for its host, as "+" there always did.
   const startsFromHostPlan = !executionContext.worktreeSshConnectionId
   if (
     startsFromHostPlan &&
