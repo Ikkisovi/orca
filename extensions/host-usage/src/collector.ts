@@ -68,7 +68,7 @@ export async function collect(config: any = {}) {
     const scanAt = Date.now()
     process.stderr.write(`Scanning ${provider}\n`)
     try {
-      const cacheFile = join(cache, `${provider}-sources.json`)
+      const cacheFile = join(cache, `${provider}-sources${['pi', 'dsh'].includes(provider) ? '-v2' : ''}.json`)
       let result: any
       if (provider === 'codex') {
         result = await scanCodexUsageFiles([], await readJson(cacheFile))

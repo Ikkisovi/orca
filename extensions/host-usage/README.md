@@ -35,7 +35,7 @@ node scripts/register.mjs
 node scripts/register.mjs --open
 ```
 
-The scanner is bundled without Electron dependencies; builds do not scan hosts or embed private data. Rebuilding the source does not modify the immutable installed copy. Reinstall `dist` after changing code.
+The scanner is bundled without Electron dependencies; builds do not scan hosts or embed private data. Rebuilding the source does not modify the immutable installed copy. Reinstall `dist` after changing code, then close the running **Usage monitor** terminal and reopen the dashboard to load the new collector.
 
 ## Lifecycle and transport
 

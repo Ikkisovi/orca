@@ -155,6 +155,15 @@ export class DshScanner {
   private readFileContent(filePath: string): string {
     if (filePath.endsWith('.zstd')) {
       try {
+        const header = Buffer.alloc(4);
+        const fd = fs.openSync(filePath, 'r');
+        let bytes = 0;
+        try { bytes = fs.readSync(fd, header, 0, 4, 0); }
+        finally { fs.closeSync(fd); }
+        const magic = header.readUInt32LE(0);
+        if (bytes !== 4 || (magic !== 0xfd2fb528 && (magic & 0xfffffff0) !== 0x184d2a50)) {
+          throw new Error('Not a Zstandard frame');
+        }
         return execFileSync("zstdcat", [filePath], { maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' });
       } catch (err) {
         throw new Error(`Cannot decompress ${filePath}: ${String(err)}`);
