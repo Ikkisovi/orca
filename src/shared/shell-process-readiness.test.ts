@@ -17,7 +17,7 @@ describe('shell process readiness', () => {
   })
 
   it.runIf(process.platform === 'darwin')(
-    'reads the executable path through non-blocking lsof on macOS',
+    'reads the executable path from real lsof on macOS',
     async () => {
       const readiness = await readShellProcessReadiness(process.pid)
       expect(readiness?.executablePath).toBe(await realpath(process.execPath))
