@@ -205,7 +205,28 @@ export async function admitAgentLaunchOperation(
   if (!attachOperationId) {
     return refusal(operationId, 'agent_session_operation_invalid', 'is not a durable operation id')
   }
-  const callerKey = agentLaunchOperationCallerKey(context)
+  const ids = { operationId, attachOperationId, callerKey: agentLaunchOperationCallerKey(context) }
+  try {
+    return await admitRecordedLaunch(context, ids, fingerprint, now)
+  } catch (error) {
+    // A window pane's click never waits on bookkeeping: with no ledger it runs unrecorded, and a
+    // replay after it settles is not answered from the ledger.
+    if (params.spawnTrigger !== 'window-pane') {
+      throw error
+    }
+    console.warn('[agent-launch] the ledger did not admit a window-pane launch', error)
+    const none = async (): Promise<void> => {}
+    return { decision: 'execute', ...ids, record: none, settle: none, fail: none }
+  }
+}
+
+async function admitRecordedLaunch(
+  context: RpcContext,
+  ids: { operationId: string; attachOperationId: string; callerKey: string },
+  fingerprint: string,
+  now: number
+): Promise<AgentLaunchAdmission> {
+  const { operationId, attachOperationId, callerKey } = ids
   // The ledger alone: admitting a terminal launch has no use for the chat host.
   const store = await context.runtime.openAgentSessionRecordStore()
   const { decision: admitted, claim } = await store.admitAndClaimOperation(

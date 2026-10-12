@@ -232,6 +232,20 @@ describe('a launch the window pane starts', () => {
     })
   })
 
+  it('still starts when the ledger cannot admit it: the click never waits on bookkeeping', async () => {
+    setAgentLaunchRecordStore(null)
+    const runtime = host()
+
+    const result = await launch(runtime)
+
+    expect(result.outcome).toEqual({ kind: 'pane', paneKey: PANE_KEY })
+    expect((await planned(runtime)).plan).toMatchObject({ command: 'claude' })
+    // Only a window pane's launch: any other launch is still refused without its record.
+    await expect(
+      launch(runtime, { spawnTrigger: undefined, operationId: `${Date.now()}-${'f'.repeat(32)}` })
+    ).rejects.toThrow('agent_session_record_store_unavailable')
+  })
+
   it('is refused from any caller but this desktop window', async () => {
     const runtime = host()
     await expect(launch(runtime, {}, {})).rejects.toThrow('agent_launch_window_pane_invalid')
