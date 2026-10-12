@@ -42,7 +42,7 @@ export type StructuredConversationCommandHold =
 /** A command that waits in line is held only by a message the host doesn't have yet, which must
  *  stay ahead of it; any other command, by anything the agent still has in flight. */
 export function structuredConversationCommandHold(input: {
-  /** A /compact the host can hold as a card behind the turn or prompt. */
+  /** A command the host can hold as a card behind the turn or prompt. */
   waitsInLine: boolean
   /** A turn runs, or the chat shows the agent working on a message it has not answered. */
   agentWorking: boolean
@@ -174,7 +174,7 @@ export async function sendStructuredConversationCommand(input: {
 export function structuredConversationCommandRunner(args: {
   agentName: string
   pending: { current: boolean }
-  /** The host holds a /compact as a card, and this client renders the queue. */
+  /** The host holds a /compact or /clear as a card, and this client renders the queue. */
   commandsWait: boolean
   /** What the chat shows: a turn, the Working rule, its background work, its sends. */
   chat: {
@@ -214,9 +214,7 @@ export function structuredConversationCommandRunner(args: {
   }
   const run = (command: AgentSessionConversationCommand) => {
     const waitsInLine =
-      command === 'compact' &&
-      args.commandsWait &&
-      !(promptPending && pendingPromptsAllUnanswerableHere(args.prompts))
+      args.commandsWait && !(promptPending && pendingPromptsAllUnanswerableHere(args.prompts))
     return sendStructuredConversationCommand({
       command,
       agentName: args.agentName,
@@ -232,11 +230,7 @@ export function structuredConversationCommandRunner(args: {
       }),
       causes,
       startFailures: () => structuredAgentSessionStartFailureFacts(args.items()),
-      send: (command) =>
-        args.send(
-          command,
-          command === 'compact' && args.commandsWait ? 'queue-if-active' : undefined
-        )
+      send: (command) => args.send(command, args.commandsWait ? 'queue-if-active' : undefined)
     })
   }
   return { runConversationCommand: run, commandRefusalCauses: causes }

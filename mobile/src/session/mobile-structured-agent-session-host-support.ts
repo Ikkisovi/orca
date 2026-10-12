@@ -13,7 +13,7 @@ export type StructuredAgentSessionHostSupport = {
   questionAnswers: boolean
   /** Mid-turn sends queue as host-held drafts; an older host keeps today's immediate path. */
   queuedMessages: boolean
-  /** A /compact sent while the agent works waits as a card; an older host refuses it. */
+  /** A /compact or /clear sent while the agent works waits as a card; an older host refuses it. */
   queuedCommands: boolean
   /** The host publishes every session's status on one stream. A host from before phones could
    *  read it refuses the call, which reads the same as its absence. */

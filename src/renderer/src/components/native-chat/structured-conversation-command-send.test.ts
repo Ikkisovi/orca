@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n/i18n'
-import type { AgentSessionConversationCommandResult } from '../../../../shared/agent-session-conversation-command'
+import type {
+  AgentSessionConversationCommand,
+  AgentSessionConversationCommandResult
+} from '../../../../shared/agent-session-conversation-command'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/tui-agent-display-names'
@@ -8,6 +11,7 @@ import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-labe
 import {
   sendStructuredConversationCommand,
   structuredConversationCommandHold,
+  structuredConversationCommandRunner,
   type StructuredConversationCommandCauses
 } from './structured-conversation-command-send'
 
@@ -191,7 +195,7 @@ describe('the line under the composer after a conversation command failed', () =
   })
 })
 
-describe('a /compact the host holds in line', () => {
+describe('a command the host holds in line', () => {
   it('reads its queued answer as sent, with no line under the composer', async () => {
     expect(
       await sent({
@@ -225,7 +229,7 @@ describe('a /compact the host holds in line', () => {
     )
   })
 
-  it('against a host that cannot hold it, and for /clear, keeps every check in true words', () => {
+  it('against a host that cannot hold it, keeps every check in true words', () => {
     expect(structuredConversationCommandHold(idle)).toBeNull()
     expect(structuredConversationCommandHold({ ...idle, agentWorking: true })).toBe('working')
     // The agent idle, only this window's own message still on its way: it is still being sent.
@@ -234,6 +238,60 @@ describe('a /compact the host holds in line', () => {
       structuredConversationCommandHold({ ...idle, agentWorking: true, sendPending: true })
     ).toBe('working')
     expect(structuredConversationCommandHold({ ...idle, promptPending: true })).toBe('prompt')
+  })
+
+  function runner(commandsWait: boolean, chat: { working?: true; backgroundTasks?: true }) {
+    const send = vi.fn(
+      async (command: AgentSessionConversationCommand, _delivery?: 'queue-if-active') => ({
+        kind: 'done' as const,
+        value: { command, state: 'completed' as const }
+      })
+    )
+    const { runConversationCommand } = structuredConversationCommandRunner({
+      agentName: structuredAgentLabel('claude'),
+      pending: { current: false },
+      commandsWait,
+      chat: {
+        turnId: chat.working ? 'turn-1' : null,
+        isWorking: chat.working === true,
+        queueSendsNext: false,
+        backgroundTasks: {
+          isMonitoring: chat.backgroundTasks === true,
+          show: chat.backgroundTasks === true
+        },
+        submissions: []
+      },
+      prompts: [],
+      rewindInFlight: { current: false },
+      sends: [],
+      items: () => [],
+      send
+    })
+    return { send, run: runConversationCommand }
+  }
+
+  it.each(['clear', 'compact'] as const)(
+    'a /%s while the agent works asks the host to hold it as a card',
+    async (command) => {
+      const { send, run } = runner(true, { working: true })
+      expect(await run(command)).toEqual({ accepted: true, error: null })
+      expect(send).toHaveBeenCalledWith(command, 'queue-if-active')
+    }
+  )
+
+  it('a /clear with background tasks running is still refused at the press', async () => {
+    const { send, run } = runner(true, { backgroundTasks: true })
+    expect(await run('clear')).toMatchObject({ accepted: false, refusedWhile: 'background' })
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('a /clear against a host that cannot hold it is refused while the agent works, as before', async () => {
+    const { send, run } = runner(false, { working: true })
+    expect(await run('clear')).toMatchObject({
+      accepted: false,
+      error: "The agent is still working. Run /clear when it's done."
+    })
+    expect(send).not.toHaveBeenCalled()
   })
 })
 

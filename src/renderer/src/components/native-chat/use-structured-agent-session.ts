@@ -237,7 +237,7 @@ export function useStructuredAgentSession(args: {
     ...structuredConversationCommandRunner({
       agentName: structuredAgentLabel(agent),
       pending: commandPending,
-      // A /compact waits in line only where its card renders.
+      // A /compact or /clear waits in line only where its card renders.
       commandsWait:
         useStructuredAgentSessionHostQueuesCommands(target) && queueCapability === 'supported',
       chat: transportState,

@@ -120,29 +120,31 @@ describe('mobile structured conversation commands', () => {
     expect(fields.command).toBe('clear')
     expect(asyncStorage.setItem).not.toHaveBeenCalled()
   })
-  it('a /compact the host holds in line skips the busy check, asks to wait, and shows nothing', async () => {
-    const { input, sendRequest } = setup()
-    sendRequest.mockResolvedValueOnce({
-      ok: true,
-      result: {
+  it.each(['compact', 'clear'] as const)(
+    'a /%s the host holds in line skips the busy check, asks to wait, and shows nothing',
+    async (command) => {
+      const { input, sendRequest } = setup()
+      sendRequest.mockResolvedValueOnce({
         ok: true,
-        value: {
-          command: 'compact',
-          state: 'completed',
-          queued: { messageId: 'op', position: 1, state: 'waiting' }
+        result: {
+          ok: true,
+          value: {
+            command,
+            state: 'completed',
+            queued: { messageId: 'op', position: 1, state: 'waiting' }
+          }
         }
-      }
-    })
-    input.busy = () => 'working'
-    input.waitsInLine = (command) => command === 'compact'
-    expect(await dispatchMobileStructuredCommand(input)).toBe('accepted')
-    const fields = requestFields(sendRequest.mock.calls[0])
-    expect(fields).toMatchObject({ command: 'compact', delivery: 'queue-if-active' })
-    expect(input.onError).not.toHaveBeenCalled()
-    // A /clear never waits: the busy check still answers it.
-    expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
-    expect(sendRequest).toHaveBeenCalledOnce()
-  })
+      })
+      input.busy = () => 'working'
+      input.waitsInLine = () => true
+      expect(await dispatchMobileStructuredCommand({ ...input, text: `/${command}` })).toBe(
+        'accepted'
+      )
+      const fields = requestFields(sendRequest.mock.calls[0])
+      expect(fields).toMatchObject({ command, delivery: 'queue-if-active' })
+      expect(input.onError).not.toHaveBeenCalled()
+    }
+  )
   it('a /clear while the agent works says so in plain words', async () => {
     const { input, sendRequest } = setup()
     input.busy = () => 'working'

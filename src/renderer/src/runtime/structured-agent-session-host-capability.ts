@@ -120,8 +120,9 @@ export function useStructuredAgentSessionHostQueuesMessagesState(
   )
 }
 
-/** Whether the host holds a /compact sent while the agent works as a queued card: only then may
- *  a client send the command's `delivery`, and only where it also renders the queue's cards. */
+/** Whether the host holds a /compact or /clear sent while the agent works as a queued card: only
+ *  then may a client send the command's `delivery`, and only where it also renders the queue's
+ *  cards. */
 export function useStructuredAgentSessionHostQueuesCommands(target: RuntimeClientTarget): boolean {
   return useStructuredAgentSessionHostCapability(
     target,

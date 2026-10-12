@@ -71,7 +71,7 @@ export function useMobileStructuredAgentSession(args: {
   } = args
   // Only a host that queues sends gets the delivery field; any host's published cards show.
   const queueCapable = hostSupport?.queuedMessages === true
-  // A /compact waits in line only where its card renders.
+  // A /compact or /clear waits in line only where its card renders.
   const commandsWait = queueCapable && hostSupport?.queuedCommands === true
   const promptCancelSupported = hostSupport?.promptCancel ?? null
   const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null

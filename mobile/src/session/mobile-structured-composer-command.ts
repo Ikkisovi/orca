@@ -37,8 +37,8 @@ export async function dispatchMobileStructuredCommand(input: {
   controller: StructuredAgentSessionComposerOptions
   /** What the agent still has in flight that refuses a command now; null when nothing does. */
   busy: () => 'working' | 'prompt' | null
-  /** The host holds this command as a card behind work in flight, so nothing here holds it. */
-  waitsInLine: (command: AgentSessionConversationCommand) => boolean
+  /** The host holds a command as a card behind work in flight, so nothing here holds it. */
+  waitsInLine: () => boolean
   /** `refusedWhile`: what the phone showed the refused command waiting on. */
   onError: MobileNativeChatSendErrorReporter
   timeoutMs: number
@@ -58,7 +58,7 @@ export async function dispatchMobileStructuredCommand(input: {
     ...input.controller,
     runConversationCommand: async (command) => {
       const shown = input.busy()
-      const waitsInLine = input.waitsInLine(command)
+      const waitsInLine = input.waitsInLine()
       const busy = waitsInLine ? null : shown
       if (busy) {
         return { accepted: false, error: busyCommandText(command, busy), refusedWhile: busy }
