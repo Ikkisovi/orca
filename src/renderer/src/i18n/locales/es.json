@@ -19576,8 +19576,6 @@
       "exitCode": "El comando terminó con el código {{code}}",
       "logTitle": "Registro de configuración de Codex",
       "copyLog": "Copiar registro",
-      "updatedRetry": "Codex está actualizado. Vuelve a intentarlo.",
-      "updatedSendAgain": "Codex está actualizado. Envía tu mensaje de nuevo.",
       "installFailed": "No se pudo instalar Codex. Vuelve a intentarlo."
     }
   }

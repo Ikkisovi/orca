@@ -4,7 +4,6 @@ import { agentSessionRefusalCauseParts } from '../../../../shared/agent-session-
 import type { StructuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
 import { joinSentences } from '../../../../shared/sentence-joining'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
-import { codexMaintenanceReason } from './codex-maintenance-copy'
 import {
   isClaudeSignInFailureKind,
   nativeChatClaudeSignInLabel,
@@ -21,8 +20,7 @@ function nativeChatLaunchNotice({
   failure = null,
   agentLabel,
   onRetry,
-  claudeSignIn = null,
-  codexMaintenanceNotice
+  claudeSignIn = null
 }: {
   lifecycle: StructuredAgentSessionLaunchLifecycle | null
   failure?: StructuredLaunchFailure | null
@@ -31,29 +29,9 @@ function nativeChatLaunchNotice({
   onRetry: () => void
   /** Offered instead of Retry until it signs in, when the start failed for want of a sign-in. */
   claudeSignIn?: NativeChatClaudeSignIn | null
-  codexMaintenanceNotice?: NativeChatComposerNotice | null
 }): NativeChatComposerNotice | null {
   if (lifecycle !== 'failed' && lifecycle !== 'visibility-unknown') {
     return null
-  }
-  const installation =
-    lifecycle === 'failed' && failure?.code === 'agent_session_operation_invalid'
-      ? failure.details?.codexInstallation
-      : undefined
-  if (installation) {
-    const facts = {
-      status:
-        installation.installedVersion === null ? ('missing' as const) : ('unsupported' as const),
-      version: installation.installedVersion,
-      minimumVersion: installation.minimumVersion
-    }
-    return codexMaintenanceNotice
-      ? { ...codexMaintenanceNotice, key: 'launch' }
-      : {
-          key: 'launch',
-          kind: 'error',
-          text: codexMaintenanceReason(facts)
-        }
   }
   const message =
     lifecycle === 'failed'
@@ -100,8 +78,7 @@ export function structuredSessionNotices({
   sessionError,
   composerError,
   claudeSignIn = null,
-  availability = null,
-  codexMaintenanceNotice
+  availability = null
 }: {
   launch: {
     lifecycle: StructuredAgentSessionLaunchLifecycle | null
@@ -114,15 +91,13 @@ export function structuredSessionNotices({
   claudeSignIn?: NativeChatClaudeSignIn | null
   /** Why the host says no chat can start here, from `useNativeChatAvailabilityNotice`. */
   availability?: NativeChatComposerNotice | null
-  codexMaintenanceNotice?: NativeChatComposerNotice | null
 }): NativeChatComposerNotice[] {
   const launchNotice = nativeChatLaunchNotice({
     lifecycle: launch.lifecycle,
     failure: launch.failure,
     agentLabel,
     onRetry: launch.retry,
-    claudeSignIn,
-    codexMaintenanceNotice
+    claudeSignIn
   })
   return [
     ...(availability ? [availability] : []),

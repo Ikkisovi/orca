@@ -11,7 +11,7 @@ afterEach(cleanup)
 
 describe('Codex installation in notice rows', () => {
   it.each([null, '0.135.0'])(
-    'shows the shared notice on a resumed Codex failure without a button: %s',
+    'shows the plain host failure through the ordinary notice row: %s',
     (installedVersion) => {
       const failure: AgentSessionFailureFact = {
         kind: 'startFailed',
@@ -35,8 +35,7 @@ describe('Codex installation in notice rows', () => {
         null,
         false,
         false,
-        'Codex',
-        { key: 'codex', kind: 'error', text }
+        'Codex'
       )
       expect(screen.getByText(text)).toBeInTheDocument()
       expect(screen.queryByRole('button')).toBeNull()

@@ -42,6 +42,9 @@ export class CodexCliInstallationCache {
     try {
       const result = await entry.result
       entry.expiresAt = result.expiresAt
+      if (result.installation.status !== 'ready' && this.entries.get(host) === entry) {
+        this.entries.delete(host)
+      }
       return result
     } catch (error) {
       if (this.entries.get(host) === entry) {

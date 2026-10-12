@@ -3,8 +3,6 @@ import { vi } from 'vitest'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
 import { MessageRow } from './NativeChatMessageRow'
-import { NativeChatCodexMaintenanceContext } from '@/hooks/useCodexMaintenance'
-import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import {
   NativeChatOrcaStopContext,
   type NativeChatOrcaStopView
@@ -23,8 +21,7 @@ export function renderStatus(
   hostLabel: string | null = null,
   continueAvailable = false,
   remoteHost = false,
-  agentName?: string,
-  maintenanceNotice?: NativeChatComposerNotice
+  agentName?: string
 ) {
   const [message] = projectStructuredItemsToNativeChat([
     {
@@ -39,14 +36,12 @@ export function renderStatus(
   const view = orcaStopView(hostLabel, continueAvailable, remoteHost)
   return render(
     <NativeChatOrcaStopContext.Provider value={view}>
-      <NativeChatCodexMaintenanceContext.Provider value={maintenanceNotice ?? null}>
-        <MessageRow
-          message={message!}
-          agentName={agentName}
-          expandSignal={false}
-          onScrollMessageToTop={vi.fn()}
-        />
-      </NativeChatCodexMaintenanceContext.Provider>
+      <MessageRow
+        message={message!}
+        agentName={agentName}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+      />
     </NativeChatOrcaStopContext.Provider>
   )
 }

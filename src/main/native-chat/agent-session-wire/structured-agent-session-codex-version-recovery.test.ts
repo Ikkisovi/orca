@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { CodexCliInstallationError } from '../../codex/codex-cli-installation-error'
-import { codexMaintenanceRecoveryAction } from '../../../shared/codex-maintenance-recovery'
 import { isStructuredAgentSessionStartFailureRow } from '../../../shared/structured-agent-session-start-failure-row-key'
-import {
-  projectQueuedMessageCards,
-  queuedMessagesQueuePause
-} from '../../../renderer/src/components/native-chat/structured-agent-session-queued-cards'
+import { projectQueuedMessageCards } from '../../../renderer/src/components/native-chat/structured-agent-session-queued-cards'
 import { HOST_TEST_SESSION, hostTestMessage } from './structured-agent-session-host-test-data'
 import { structuredAgentSessionHostInstance } from './structured-agent-session-queued-pause'
 import {
@@ -23,7 +19,7 @@ beforeEach(async () => {
 })
 afterEach(() => rig.dispose())
 
-async function recoveryAction() {
+async function retainedCards() {
   const result = await rig.host.history({ sessionId: HOST_TEST_SESSION, direction: 'tail' })
   if (!result.ok) {
     throw new Error('History refused')
@@ -32,12 +28,7 @@ async function recoveryAction() {
   const cards = projectQueuedMessageCards(page.queuedMessages, page.submissions, {
     queuePaused: Boolean(page.queuePause)
   })
-  const pause = queuedMessagesQueuePause(cards, page.queuePause ?? null)
-  return {
-    page,
-    cards,
-    action: codexMaintenanceRecoveryAction(false, cards, pause !== null)
-  }
+  return { page, cards }
 }
 
 async function retainedDraft() {
@@ -80,7 +71,7 @@ it.each(['returned', 'held'] as const)(
         holdReason: 'send_failed'
       })
     }
-    const { page, cards, action } = await recoveryAction()
+    const { page, cards } = await retainedCards()
     expect(page.queuePause ?? null).toBeNull()
     expect(cards).toMatchObject([{ messageId: id, hold: kind === 'held' ? 'paused' : 'returned' }])
     expect(
@@ -88,6 +79,8 @@ it.each(['returned', 'held'] as const)(
     ).toMatchObject([
       {
         body: {
+          text: 'Codex 0.135.0 is too old for chats. Update to 0.136.0 or newer.',
+          tone: 'error',
           failure: { refusal: { details: { codexInstallation: { installedVersion: '0.135.0' } } } }
         }
       }
@@ -96,11 +89,7 @@ it.each(['returned', 'held'] as const)(
     const attempts = rig.starts.mock.calls.length
     expect((await rig.submission(rejected))?.handedOverAt).toBeUndefined()
     expect(rig.starts).toHaveBeenCalledTimes(attempts)
-    expect(action).toEqual({ kind: 'message', messageId: id })
-    if (action.kind !== 'message') {
-      throw new Error('Expected per-message Send')
-    }
-    expect(await rig.sendNow(action.messageId)).toMatchObject({ ok: true })
+    expect(await rig.sendNow(id)).toMatchObject({ ok: true })
     await eventually(async () => expect((await rig.handoff(id))?.handedOverAt).toBeDefined())
     expect(await rig.handoffId(id)).not.toBe(rejected)
     expect(rig.starts).toHaveBeenCalledTimes(attempts + 1)
@@ -111,18 +100,8 @@ it.each(['returned', 'held'] as const)(
 it('offers Resume only for an actual pause and releases it through the host', async () => {
   const id = await retainedDraft()
   rig.starts.mockReset()
-  const { action } = await recoveryAction()
-  expect(action.kind).toBe('queue')
+  expect(await rig.queuePause()).not.toBeNull()
   expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
   await eventually(async () => expect((await rig.handoff(id))?.handedOverAt).toBeDefined())
   expect(await rig.queuePause()).toBeNull()
-})
-
-it('has no recovery button when no draft or resumable pause remains', async () => {
-  const id = await retainedDraft()
-  expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
-  await eventually(async () => expect((await rig.handoff(id))?.dispatchState).toBe('rejected'))
-  await rig.deleteQueued(id)
-  const { action } = await recoveryAction()
-  expect(action.kind).toBe('send-again')
 })

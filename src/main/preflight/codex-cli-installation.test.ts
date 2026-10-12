@@ -56,12 +56,29 @@ describe('Codex binary version cache', () => {
     )
   })
 
+  it.each([codexCliInstallation(false, null), codexCliInstallation(true, '0.135.0')])(
+    'shares a concurrent $status probe but never caches its refusal',
+    async (installation) => {
+      const cache = new CodexCliInstallationCache()
+      const probe = vi.fn().mockResolvedValue(installation)
+      const refused = await Promise.all([
+        cache.read('host', 'unchanged-wrapper', probe),
+        cache.read('host', 'unchanged-wrapper', probe)
+      ])
+      expect(refused).toEqual([installation, installation])
+      expect(probe).toHaveBeenCalledTimes(1)
+      probe.mockResolvedValue(codexCliInstallation(true, '0.136.0'))
+      expect((await cache.read('host', 'unchanged-wrapper', probe)).status).toBe('ready')
+      expect(probe).toHaveBeenCalledTimes(2)
+    }
+  )
+
   it('rechecks an updated binary and a different resolved path', async () => {
     const program = await binary()
-    prints('codex-cli 0.135.0')
-    expect((await readCodexCliInstallation({ program })).status).toBe('unsupported')
-    await writeFile(program, 'updated fake binary of a different size')
     prints('codex-cli 0.136.0')
+    expect((await readCodexCliInstallation({ program })).status).toBe('ready')
+    await writeFile(program, 'updated fake binary of a different size')
+    prints('codex-cli 0.137.0')
     expect((await readCodexCliInstallation({ program })).status).toBe('ready')
     await utimes(program, new Date(), new Date(Date.now() + 10_000))
     await readCodexCliInstallation({ program })
@@ -69,30 +86,28 @@ describe('Codex binary version cache', () => {
     expect(runProcess).toHaveBeenCalledTimes(4)
   })
 
-  it('allows a timeout, then retries the unchanged binary after the bounded cache expires', async () => {
+  it('allows a timeout and retries the unchanged binary immediately', async () => {
     const program = await binary()
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(0)
     prints('codex-cli 0.135.0', true)
     expect((await readCodexCliInstallation({ program })).status).toBe('unknown')
     prints('codex-cli 0.136.0')
-    expect((await readCodexCliInstallation({ program })).status).toBe('unknown')
-    vi.setSystemTime(30_001)
     expect((await readCodexCliInstallation({ program })).status).toBe('ready')
     expect(runProcess).toHaveBeenCalledTimes(2)
   })
 
-  it('notices an npm package update even when the launcher is unchanged', async () => {
+  it('invalidates a supported result when the npm package changes and its launcher stays unchanged', async () => {
     const root = await mkdtemp(join(tmpdir(), 'codex-npm-test-'))
     roots.push(root)
     await mkdir(join(root, 'bin'))
     const program = join(root, 'bin', 'codex.js')
     await writeFile(program, 'unchanged npm launcher; never executed')
-    await writeFile(join(root, 'package.json'), '{"version":"0.135.0"}')
-    prints('codex-cli 0.135.0')
-    expect((await readCodexCliInstallation({ program })).status).toBe('unsupported')
-    await writeFile(join(root, 'package.json'), '{"version":"0.136.0","updated":true}')
+    await writeFile(join(root, 'package.json'), '{"version":"0.136.0"}')
     prints('codex-cli 0.136.0')
+    expect((await readCodexCliInstallation({ program })).status).toBe('ready')
+    await writeFile(join(root, 'package.json'), '{"version":"0.137.0","updated":true}')
+    prints('codex-cli 0.137.0')
     expect((await readCodexCliInstallation({ program })).status).toBe('ready')
     expect(runProcess).toHaveBeenCalledTimes(2)
   })
@@ -140,10 +155,9 @@ describe('Codex binary version cache', () => {
     prints('company-wrapper 0.1.0\ncodex-cli 0.135.0')
     expect((await readCodexCliInstallation({ program })).status).toBe('unsupported')
     prints('company-wrapper 0.1.0\ncodex-cli 0.136.0')
-    vi.setSystemTime(30_001)
     expect((await readCodexCliInstallation({ program })).status).toBe('ready')
     prints('company-wrapper 0.1.0\ncodex-cli 0.135.0')
-    vi.setSystemTime(60_002)
+    vi.setSystemTime(30_001)
     expect((await readCodexCliInstallation({ program })).status).toBe('unsupported')
     expect(runProcess).toHaveBeenCalledTimes(3)
   })
@@ -183,18 +197,18 @@ describe('Codex binary version cache', () => {
     await mkdir(nativeDirectory, { recursive: true })
     const native = join(nativeDirectory, process.platform === 'win32' ? 'codex.exe' : 'codex')
     await writeFile(native, 'old binary')
-    prints('codex-cli 0.135.0')
-    await readCodexCliInstallation({ program: launcher })
-    await writeFile(native, 'updated binary of a different size')
     prints('codex-cli 0.136.0')
     expect((await readCodexCliInstallation({ program: launcher })).status).toBe('ready')
+    await writeFile(native, 'updated binary of a different size')
+    prints('codex-cli 0.137.0')
+    expect((await readCodexCliInstallation({ program: launcher })).version).toBe('0.137.0')
     expect(runProcess).toHaveBeenCalledTimes(2)
   })
   it('returns the original host expiry on cached reads and an opaque identity for each configuration', async () => {
     const program = await binary()
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(0)
-    prints('codex-cli 0.135.0')
+    prints('codex-cli 0.136.0')
     const input = { program, env: { SELECTION: 'private-test-value' } }
     const first = await readCodexCliInstallationEvidence(input)
     expect(first.expiresAt).toBe(30_000)

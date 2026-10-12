@@ -109,7 +109,7 @@ describe('Codex install failure copy', () => {
     expect(await screen.findByText('Codex could not be installed. Try again.')).toBeInTheDocument()
     expect(screen.queryByText(/private transport stack/)).toBeNull()
   })
-  it('states a too-old Codex in the start-failure notice without a button', () => {
+  it('states a too-old Codex through the ordinary start-failure notice with manual Retry', () => {
     const notices = structuredSessionNotices({
       agentLabel: 'Codex',
       sessionError: null,
@@ -127,9 +127,11 @@ describe('Codex install failure copy', () => {
       }
     })
     render(<NativeChatComposerNotices notices={notices} />)
-    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
     expect(
-      screen.getByText('Codex 0.135.0 is too old for chats. Update to 0.136.0 or newer.')
+      screen.getByText(
+        'Chat could not be started. Codex 0.135.0 is too old for chats. Update to 0.136.0 or newer.'
+      )
     ).toBeInTheDocument()
   })
 })

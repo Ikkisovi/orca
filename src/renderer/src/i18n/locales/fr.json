@@ -19577,8 +19577,6 @@
       "exitCode": "La commande s’est terminée avec le code {{code}}",
       "logTitle": "Journal de configuration de Codex",
       "copyLog": "Copier le journal",
-      "updatedRetry": "Codex est à jour. Réessayez.",
-      "updatedSendAgain": "Codex est à jour. Envoyez à nouveau votre message.",
       "installFailed": "Codex n’a pas pu être installé. Réessayez."
     }
   }

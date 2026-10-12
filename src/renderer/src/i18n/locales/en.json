@@ -19732,8 +19732,6 @@
       "exitCode": "Command exited with code {{code}}",
       "logTitle": "Codex setup log",
       "copyLog": "Copy log",
-      "updatedRetry": "Codex is updated. Retry.",
-      "updatedSendAgain": "Codex is updated. Send your message again.",
       "installFailed": "Codex could not be installed. Try again."
     }
   },

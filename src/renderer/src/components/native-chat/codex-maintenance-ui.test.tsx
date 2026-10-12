@@ -4,14 +4,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { codexCliInstallation } from '../../../../shared/codex-cli-installation'
 import type { CodexMaintenanceState } from '../../../../shared/codex-cli-maintenance'
-import type { CodexMaintenanceTarget } from '@/lib/codex-maintenance-client'
-import { useCodexMaintenance } from '@/hooks/useCodexMaintenance'
 import {
   refreshCodexMaintenance,
   resetCodexMaintenanceStoreForTests
 } from '@/lib/codex-maintenance-store'
 import { CodexMaintenanceRow } from '../settings/CodexMaintenanceRow'
-import { NativeChatComposerNotices } from './NativeChatComposerNotices'
 import { CodexMaintenanceLogDialog } from './CodexMaintenanceLogDialog'
 
 const { call, refreshAgents } = vi.hoisted(() => ({
@@ -39,18 +36,9 @@ function state(installed: boolean, version: string | null): CodexMaintenanceStat
     job: null
   }
 }
-function Composer({ target = TARGET }: { target?: CodexMaintenanceTarget } = {}) {
-  const maintenance = useCodexMaintenance(target)
-  return (
-    <>
-      <NativeChatComposerNotices notices={maintenance.notice ? [maintenance.notice] : []} />
-      <button disabled={maintenance.blocked}>Send</button>
-      <CodexMaintenanceLogDialog />
-    </>
-  )
-}
 beforeEach(() => {
   call.mockReset()
+  refreshAgents.mockClear()
   resetCodexMaintenanceStoreForTests()
 })
 afterEach(() => {
@@ -64,45 +52,7 @@ async function flush() {
   })
 }
 
-describe('Codex composer and Settings maintenance', () => {
-  it('does not block on a completed installation response from a host whose contact is down', async () => {
-    call.mockResolvedValue(state(true, '0.135.0'))
-    const target = { kind: 'environment', environmentId: 'offline' } as const
-    render(<Composer target={target} />)
-    await act(async () => {
-      await refreshCodexMaintenance(target)
-    })
-    expect(screen.getByText('Send')).toBeEnabled()
-    expect(screen.queryByText(TOO_OLD)).not.toBeInTheDocument()
-  })
-
-  it.each([
-    { installed: false, version: null, text: "Codex isn't installed." },
-    { installed: true, version: '0.135.0', text: TOO_OLD },
-    { installed: true, version: null, text: null },
-    { installed: true, version: '0.136.0', text: null }
-  ])('renders known installation facts, allows unknown: $version / $installed', async (f) => {
-    call.mockResolvedValue(state(f.installed, f.version))
-    render(<Composer />)
-    await flush()
-    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', !!f.text)
-    if (f.text) {
-      expect(screen.getByText(f.text)).toBeInTheDocument()
-    } else {
-      expect(screen.queryByRole('listitem')).toBeNull()
-    }
-    // Install Codex lives only in Settings; the composer states the fact.
-    expect(screen.queryAllByRole('button').map((button) => button.textContent)).toEqual(['Send'])
-  })
-  it('allows a response without current evidence', async () => {
-    const legacy = state(true, '0.135.0')
-    delete legacy.evidence
-    call.mockResolvedValue(legacy)
-    render(<Composer />)
-    await flush()
-    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
-    expect(screen.queryByText(TOO_OLD)).toBeNull()
-  })
+describe('Codex Settings maintenance', () => {
   it.each([
     { installed: false, version: null, text: "Codex isn't installed.", install: true },
     { installed: true, version: '0.135.0', text: TOO_OLD, install: false },
@@ -149,7 +99,7 @@ describe('Codex composer and Settings maintenance', () => {
     )
     render(
       <>
-        <Composer target={{ kind: 'local', cwd: '/project' }} />
+        <CodexMaintenanceLogDialog />
         <CodexMaintenanceRow target={TARGET} />
       </>
     )
@@ -166,7 +116,7 @@ describe('Codex composer and Settings maintenance', () => {
     expect(screen.getByText(/permission denied/)).toBeInTheDocument()
     expect(call.mock.calls.filter(([, p]) => p.operation === 'start')).toHaveLength(1)
   })
-  it('clears both notices after successful host verification', async () => {
+  it('refreshes Settings and detected agents explicitly after install completion', async () => {
     const initial = state(false, null)
     const running: CodexMaintenanceState = {
       ...initial,
@@ -184,11 +134,17 @@ describe('Codex composer and Settings maintenance', () => {
       job: { ...running.job!, phase: 'completed', exitCode: 0 }
     }
     call.mockImplementation(async (_target, params) =>
-      params.operation === 'status' ? initial : params.operation === 'start' ? running : complete
+      params.operation === 'status'
+        ? refreshAgents.mock.calls.length
+          ? complete
+          : initial
+        : params.operation === 'start'
+          ? running
+          : complete
     )
     render(
       <>
-        <Composer />
+        <CodexMaintenanceLogDialog />
         <CodexMaintenanceRow target={TARGET} />
       </>
     )
@@ -199,47 +155,6 @@ describe('Codex composer and Settings maintenance', () => {
       { timeout: 3000 }
     )
     expect(screen.queryByText("Codex isn't installed.")).toBeNull()
-    expect(screen.getByText('Send', { selector: 'button' })).toBeEnabled()
-  })
-  it('withholds a cached refusal on remount, focus revalidation and failed contact', async () => {
-    call.mockResolvedValue(state(true, '0.135.0'))
-    const first = render(<Composer />)
-    await flush()
-    expect(screen.getByText(TOO_OLD)).toBeInTheDocument()
-    first.unmount()
-    let rejectRead: (error: Error) => void = () => {}
-    call.mockImplementation(
-      () =>
-        new Promise((_resolve, reject) => {
-          rejectRead = reject
-        })
-    )
-    render(<Composer />)
-    expect(screen.queryByText(TOO_OLD)).toBeNull()
-    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
-    await act(async () => {
-      rejectRead(new Error('Host unavailable'))
-    })
-    expect(screen.queryByText(TOO_OLD)).toBeNull()
-    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
-    call.mockResolvedValue(state(true, '0.135.0'))
-    await flush()
-    expect(screen.getByText(TOO_OLD)).toBeInTheDocument()
-    let completeRead: (value: CodexMaintenanceState) => void = () => {}
-    call.mockImplementation(
-      () =>
-        new Promise<CodexMaintenanceState>((resolve) => {
-          completeRead = resolve
-        })
-    )
-    act(() => {
-      window.dispatchEvent(new Event('focus'))
-    })
-    expect(screen.queryByText(TOO_OLD)).toBeNull()
-    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
-    await act(async () => {
-      completeRead(state(true, '0.136.0'))
-    })
-    expect(screen.queryByText(TOO_OLD)).toBeNull()
+    expect(refreshAgents).toHaveBeenCalled()
   })
 })

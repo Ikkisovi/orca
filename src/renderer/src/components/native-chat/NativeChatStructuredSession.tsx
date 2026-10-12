@@ -45,8 +45,6 @@ import { useNativeChatHostOutage } from './use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from './use-native-chat-host-outage-notice'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
 import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
-import { NativeChatCodexMaintenanceContext } from '@/hooks/useCodexMaintenance'
-import { useNativeChatCodexMaintenance } from './use-native-chat-codex-maintenance'
 import { NativeChatStructuredSessionControls } from './NativeChatStructuredSessionControls'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
@@ -143,20 +141,8 @@ export function NativeChatStructuredSession(
     )
   const startFailures = useStructuredAgentSessionStartFailureFacts(
     controller.journalItems,
-    needsFailureFacts || props.agent === 'claude',
-    props.agent === 'codex'
+    needsFailureFacts || props.agent === 'claude'
   )
-  const codexMaintenance = useNativeChatCodexMaintenance({
-    agent: props.agent,
-    sessionId: props.sessionId,
-    target: {
-      ...props.target,
-      ...(fileLinkContext?.worktreePath ? { cwd: fileLinkContext.worktreePath } : {})
-    },
-    launch: provisionalLaunch,
-    startFailures,
-    queuedMessages: submits.queuedMessages
-  })
   const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
     pending: controller.pending,
     submissions: controller.submissions,
@@ -208,7 +194,7 @@ export function NativeChatStructuredSession(
     props,
     controller,
     sendThroughLaunch,
-    starting: provisionalLaunch.starting || codexMaintenance.blocked,
+    starting: provisionalLaunch.starting,
     worktreeId: ownerWorktreeId ?? undefined,
     optionPickerRequest,
     setOptionPickerRequest,
@@ -242,8 +228,7 @@ export function NativeChatStructuredSession(
     sessionError,
     composerError: composerError ?? continuation.continueError,
     claudeSignIn,
-    availability,
-    codexMaintenanceNotice: codexMaintenance.notice
+    availability
   })
   if (hostNotice) {
     notices.push(hostNotice)
@@ -283,31 +268,29 @@ export function NativeChatStructuredSession(
           <NativeChatRewindContext.Provider value={controller.rewind.surface}>
             <NativeChatOrcaStopContext.Provider value={continuation.view}>
               <NativeChatClaudeSignInContext.Provider value={claudeSignIn}>
-                <NativeChatCodexMaintenanceContext.Provider value={codexMaintenance.notice}>
-                  <NativeChatMessageList
-                    // A rewind replaces the conversation; nothing the old transcript held carries over.
-                    key={controller.epoch ?? undefined}
-                    ref={submits.messageListRef}
-                    session={session}
-                    journalItems={controller.journalItems}
-                    journalSubmissions={controller.submissions}
-                    journalLatestTurn={controller.latestTurn}
-                    subagentRoster={controller.subagentRoster}
-                    railOutline={controller.railOutline}
-                    isVisible={props.isVisible}
-                    isWorking={controller.isWorking}
-                    expandSignal={false}
-                    workingStartedAt={controller.workingStartedAt}
-                    settledTurns={controller.settledTurns}
-                    awaitingInput={prompt === null ? null : 'shown'}
-                    turnActivity={controller.turnActivity}
-                    stopping={stopControls.stopping}
-                    onLinkClick={onLinkClick}
-                    allowFileUriLinks={onLinkClick !== undefined}
-                    runtimeContext={imageRuntimeContext}
-                    deliveryNotices={deliveryNotices}
-                  />
-                </NativeChatCodexMaintenanceContext.Provider>
+                <NativeChatMessageList
+                  // A rewind replaces the conversation; nothing the old transcript held carries over.
+                  key={controller.epoch ?? undefined}
+                  ref={submits.messageListRef}
+                  session={session}
+                  journalItems={controller.journalItems}
+                  journalSubmissions={controller.submissions}
+                  journalLatestTurn={controller.latestTurn}
+                  subagentRoster={controller.subagentRoster}
+                  railOutline={controller.railOutline}
+                  isVisible={props.isVisible}
+                  isWorking={controller.isWorking}
+                  expandSignal={false}
+                  workingStartedAt={controller.workingStartedAt}
+                  settledTurns={controller.settledTurns}
+                  awaitingInput={prompt === null ? null : 'shown'}
+                  turnActivity={controller.turnActivity}
+                  stopping={stopControls.stopping}
+                  onLinkClick={onLinkClick}
+                  allowFileUriLinks={onLinkClick !== undefined}
+                  runtimeContext={imageRuntimeContext}
+                  deliveryNotices={deliveryNotices}
+                />
               </NativeChatClaudeSignInContext.Provider>
             </NativeChatOrcaStopContext.Provider>
           </NativeChatRewindContext.Provider>
