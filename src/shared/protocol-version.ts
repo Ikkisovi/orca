@@ -240,7 +240,8 @@ export const AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY =
 // the client's queueing setting and chord, never the published draft list or its card actions: a
 // host without it still publishes a message it kept unsent across a restart or a close, and both
 // clients show that card and call its actions. DARK ON PURPOSE — not in RUNTIME_CAPABILITIES:
-// advertising still requires the integrated Codex steer matrix (#21062) in the shipped host.
+// advertising still requires the integrated Codex steer matrix (#21062) in the shipped host, and
+// a host that queues /clear: older ones refuse a /clear sent with `delivery`.
 // v1 includes `submission.queuedMessageId` on every draft hand-off: a client reads that link and
 // never compares a draft id with a submission id. It also publishes the queue's pause once, as
 // `queuePause` beside the list, lifted by `agentSession.queuedMessagesResume` or any turn sent
@@ -258,8 +259,8 @@ export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
 export const AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY =
   'agent-session.queued-message-edit.v1' as const
 // Why: `agentSession.conversationCommand`'s params are strict, so an older host rejects
-// `delivery`. A host advertising this holds a /compact sent while the agent works as a queued
-// card instead of refusing it. Clients ask only when queued-messages.v1 is advertised too:
+// `delivery`. A host advertising this holds a /compact or /clear sent while the agent works as a
+// queued card instead of refusing it. Clients ask only when queued-messages.v1 is advertised too:
 // the card is the only place the waiting command shows.
 export const AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY =
   'agent-session.queued-commands.v1' as const

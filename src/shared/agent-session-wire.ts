@@ -337,10 +337,11 @@ export type AgentSessionAttachResult = {
   tabId?: string
 }
 
-/** The host queued the send as a draft instead of submitting it. Only clients
- *  that sent `delivery: 'queue-if-active'` — gated on
- *  `agent-session.queued-messages.v1` — ever receive this arm; `state` other
- *  than `waiting` appears only on replays of an already-settled draft. */
+/** The host queued the send as a draft instead of submitting it: the answer to
+ *  a send or command that asked with `delivery: 'queue-if-active'` (gated on
+ *  `agent-session.queued-messages.v1`), and to a Send of a /clear card, as its
+ *  clear left the card. Otherwise `state` other than `waiting` appears only on
+ *  replays of an already-settled draft. */
 export type AgentSessionQueuedSendReceipt = {
   messageId: string
   position: number

@@ -4,14 +4,20 @@ import type {
 } from '../../../shared/agent-session-conversation-command'
 import type {
   AgentSessionMutationEnvelope,
-  AgentSessionMutationResult
+  AgentSessionMutationResult,
+  AgentSessionQueuedSendReceipt
 } from '../../../shared/agent-session-wire'
 import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import { agentSessionOperationKey } from '../../../shared/agent-session-operation-ledger'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { sendPreparation } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
-import { conversationCommandBlocked } from './structured-conversation-command-admission'
+import {
+  clearConversationOnLane,
+  queuedClearCardState,
+  structuredAgentSessionClearBody
+} from './structured-conversation-clear'
+import { maybeQueueStructuredAgentSessionSend } from './structured-agent-session-queued-messages'
 import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import {
   agentSessionFailureWords,
@@ -37,20 +43,28 @@ export function conversationCommandFailure(
 export type ConversationCommandParams = {
   envelope: AgentSessionMutationEnvelope
   command: AgentSessionConversationCommand
-  /** /compact only: wait as a card while the agent works, as a queued send does. */
+  /** Wait as a card while the agent works, as a queued send does. */
   delivery?: 'queue-if-active'
   /** Host-local, set by the client-facing command RPC as for an ordinary send. */
   userSend?: true
 }
-/** Stop the provider and record a fresh-context boundary in the same conversation. */
+function queuedClearAnswer(
+  queued: AgentSessionQueuedSendReceipt
+): AgentSessionConversationCommandResult {
+  return { command: 'clear', state: 'completed', queued }
+}
+
+/** Stop the provider and record a fresh-context boundary in the same conversation; asked with
+ *  `delivery` while the agent works, wait as a /clear card the queue runs when its turn comes. */
 export function runStructuredConversationCommand(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
   params: ConversationCommandParams
 ): Promise<AgentSessionMutationResult<AgentSessionConversationCommandResult>> {
-  const { envelope, command } = params
+  const { envelope, command, delivery } = params
   const { sessionId, clientOperationId } = envelope
   const store = context.deps.store
+  const operation = { callerKey: caller.callerKey, operationId: clientOperationId }
   const matching = () => {
     const record = store.getRecord(sessionId)?.conversationCommand
     return record?.operationId === clientOperationId && record.callerKey === caller.callerKey
@@ -71,26 +85,38 @@ export function runStructuredConversationCommand(
       journal: () => context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
       now: context.now,
+      // TEMPORARY: the card accepts through this ledger plan with the rest of /clear, until the
+      // ledger co-write marked TEMPORARY in structured-agent-session-command-receipt.ts is retired.
       plan: {
         method: 'agentSession.conversationCommand',
-        fields: { command },
+        fields: { command, ...(delivery ? { delivery } : {}) },
         // Written to the conversation, not the agent, so whoever owns the agent does not matter.
         conversationWrite: true,
         recoverUnknownFromDurableState: true,
         settlesWithWrite: true,
-        successReceipt: () =>
-          store.conversationReceipts.clear(
-            () => {
-              if (!clear) {
-                throw new Error('agent_session_clear_not_completed')
-              }
-              return clear
-            },
-            { callerKey: caller.callerKey, operationId: clientOperationId }
-          ),
-        replay: (_ctx, outcome) => {
+        // One store receipt either way, chosen at the write: the clear's record, or the card's.
+        successReceipt: () => {
+          const cleared = store.conversationReceipts.clear(() => {
+            if (!clear) {
+              throw new Error('agent_session_clear_not_completed')
+            }
+            return clear
+          }, operation)
+          const queued = store.operationOutcomeReceipt({
+            ...operation,
+            outcome: { status: 'succeeded', sessionId }
+          })
+          return {
+            write: (db, row) => (clear ? cleared : queued).write(db, row),
+            committed: () => (clear ? cleared : queued).committed()
+          }
+        },
+        replay: (ctx, outcome) => {
           if (outcome.status === 'succeeded' && outcome.conversationCommand) {
             return outcome.conversationCommand
+          }
+          if (delivery && outcome.status === 'succeeded') {
+            return queuedClearAnswer(queuedClearCardState(ctx.journal, clientOperationId))
           }
           const prior = matching()
           return prior?.phase === 'committed' ? prior : null
@@ -98,46 +124,29 @@ export function runStructuredConversationCommand(
         // The commit is the only write, so a clear with no committed answer changed nothing.
         rerunWhenReplayMissing: () => true,
         run: async (ctx) => {
-          const record = store.getRecord(sessionId)!
-          const blocked = conversationCommandBlocked(
-            ctx,
-            record,
-            context.readChildWork(sessionId),
-            context.sessions.get(sessionId)?.child ? undefined : 'at-rest'
-          )
-          if (blocked) {
-            return { ok: false, refusal: blocked }
+          const card = await maybeQueueStructuredAgentSessionSend(context, ctx, {
+            envelope,
+            body: structuredAgentSessionClearBody(),
+            ...(params.userSend ? { userSend: true } : {}),
+            ...(delivery ? { delivery } : {})
+          })
+          if (card && !card.ok) {
+            return card
           }
-          await context.stopAgent(sessionId, { cause: 'context-clear' })
-          const stopped = store.getRecord(sessionId)!
-          const fence = stopped.lease.runtimeFence
-          const rechecked = conversationCommandBlocked(
-            { ...ctx, fence },
-            stopped,
-            context.readChildWork(sessionId),
-            'at-rest'
-          )
-          if (rechecked) {
-            return { ok: false, refusal: rechecked }
+          if (card && 'queued' in card.value) {
+            return { ok: true, value: queuedClearAnswer(card.value.queued) }
           }
-          const completed: AgentSessionConversationClear['command'] = {
-            command: 'clear',
-            runtimeFence: fence,
-            operationId: clientOperationId,
-            callerKey: caller.callerKey,
-            phase: 'committed',
-            state: 'completed'
-          }
-          clear = { sessionId, fence, command: completed, now: context.now() }
-          if (!ctx.operationReceipt) {
-            throw new Error('agent_session_clear_receipt_missing')
-          }
-          await ctx.journal.context.clear(
-            providerContextBoundaryForClear(clear),
-            ctx.operationReceipt,
-            agentSessionOperationKey(caller.callerKey, clientOperationId)
-          )
-          return { ok: true, value: completed }
+          return clearConversationOnLane(context, ctx, operation, (completed) => {
+            clear = completed
+            if (!ctx.operationReceipt) {
+              throw new Error('agent_session_clear_receipt_missing')
+            }
+            return ctx.journal.context.clear(
+              providerContextBoundaryForClear(completed),
+              ctx.operationReceipt,
+              agentSessionOperationKey(caller.callerKey, clientOperationId)
+            )
+          })
         }
       }
     })

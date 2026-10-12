@@ -33,6 +33,7 @@ import { nextSendableQueuedCard } from '../agent-session-journal/queued-message-
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session-turns'
 import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
+import { isQueuedClearCard } from '../agent-session-journal/journal-context-clear'
 
 /** Text-only v1: any image block routes to the immediate path. */
 export function queuedMessageBodyIsTextOnly(body: AgentJournalMessageItem): boolean {
@@ -260,13 +261,16 @@ export type QueuedMessageDrainDeps = {
   /** The consumed submission is ordinary #22821 work from here on. */
   wakeDelivery: (sessionId: string) => void
   logger: StructuredAgentSessionLogger
+  /** Runs a /clear card itself, on the step's lane (`runQueuedConversationClear`). */
+  runClear: (card: QueuedMessageRow, journal: AgentSessionJournal) => Promise<void>
 }
 
 /**
  * The serialized drain. Woken by every journal commit (turn, submission, prompt,
  * command and Stop settlements are all commits), by draft mutations, and by the
  * conversation opening; each step re-derives everything and consumes at most one
- * draft — the consumed submission then owes work, which gates the next.
+ * draft — the consumed submission then owes work, which gates the next. A /clear card is run,
+ * never handed to the agent: its own commit wakes the step that sends the card behind it.
  */
 export class StructuredAgentSessionQueuedMessageDrain {
   private readonly scheduled = new Set<string>()
@@ -345,6 +349,12 @@ export class StructuredAgentSessionQueuedMessageDrain {
     const record = this.deps.getRecord(sessionId)
     const next = nextStructuredQueuedMessage({ journal, record, fence })
     if (this.disposed || !next) {
+      return
+    }
+    if (isQueuedClearCard(next)) {
+      // Never the send-failed hold below: a held card is passed over, and those behind it would
+      // drain into the context this clear discards.
+      await this.deps.runClear(next, journal)
       return
     }
     // Always a fresh id: the submission names its draft by `queuedMessageId`, never by id equality.

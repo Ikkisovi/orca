@@ -38,6 +38,12 @@ import {
   structuredAgentSessionSendBlock
 } from './structured-agent-session-send-preparation'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import { isQueuedClearCard } from '../agent-session-journal/journal-context-clear'
+import {
+  queuedClearCardState,
+  queuedClearOperationKey,
+  runQueuedConversationClear
+} from './structured-conversation-clear'
 
 function invalid(message: string): {
   ok: false
@@ -108,7 +114,7 @@ export function mutateQueued<TValue>(
  * wait — through the same send block and pending-prompt gates as any send;
  * supersession, Stop and prepared commands are never overridden. The card goes
  * out under this operation's id, never its own, and the submission names it by
- * `queuedMessageId`; one id still means one delivery.
+ * `queuedMessageId`; one id still means one delivery. A /clear card is run by the host instead.
  */
 export function sendQueuedStructuredAgentMessage(
   context: StructuredAgentSessionMutationContext,
@@ -117,15 +123,23 @@ export function sendQueuedStructuredAgentMessage(
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
   const { messageId } = params
   const operationId = params.envelope.clientOperationId
+  const settledByOp = (ctx: AgentSessionTurnContext) =>
+    agentSessionOperationKey(ctx.resolvedBy, operationId)
   const plan: MutationPlan<AgentSessionSendResult> = {
     method: 'agentSession.queuedMessageSend',
     fields: { messageId },
     conversationWrite: true,
-    // Its own submission's row, or the row of the hand-off that already took the card.
+    // Its own submission's row, or the row of the hand-off that already took the card. A /clear
+    // card's clear commits its own record, so this Send's receipt follows alone: the card once
+    // spent, nothing while returned, so a retry runs it afresh.
     commandReceipt: {
       result: (row) => journalRowReceiptResult(row, 'submission'),
       unwritten: (value, ctx) =>
-        submissionRowReceipt(ctx, 'submission' in value ? value.submission : undefined)
+        'queued' in value
+          ? value.queued.state === 'withdrawn'
+            ? { kind: 'queued-draft', messageId }
+            : null
+          : submissionRowReceipt(ctx, value.submission)
     },
     run: async (ctx): Promise<TurnOutcome<AgentSessionSendResult>> => {
       // The one queue gate; Send-now's override set is exactly `working` (plus
@@ -143,7 +157,11 @@ export function sendQueuedStructuredAgentMessage(
         return invalid('No queued message by that id.')
       }
       if (row.state === 'withdrawn') {
-        return invalid('This queued message was withdrawn.')
+        // Spent by its own clear (the drain's, or this Send's whose receipt never landed).
+        const spentByItsClear = [queuedClearOperationKey(messageId), settledByOp(ctx)]
+        return spentByItsClear.includes(row.settledByOp ?? '')
+          ? { ok: true, value: queuedClearSendAnswer(ctx, operationId, messageId) }
+          : invalid('This queued message was withdrawn.')
       }
       if (row.state === 'dispatched') {
         // Already a submission — answer with it rather than sending twice.
@@ -156,6 +174,11 @@ export function sendQueuedStructuredAgentMessage(
       // Send only while the agent is idle; this answers an older one that offers it mid-turn.
       if (hold === 'working' && row.body.command) {
         return invalid("A command can't be sent while the agent is working.")
+      }
+      if (isQueuedClearCard(row)) {
+        // A refusal lands on the card itself, so this answers with the card, never says it twice.
+        await runQueuedConversationClear(context, ctx, row, settledByOp(ctx))
+        return { ok: true, value: queuedClearSendAnswer(ctx, operationId, messageId) }
       }
       const submissionId = operationId
       try {
@@ -172,7 +195,7 @@ export function sendQueuedStructuredAgentMessage(
           {
             messageId,
             expect: row.state,
-            settledByOp: agentSessionOperationKey(ctx.resolvedBy, operationId),
+            settledByOp: settledByOp(ctx),
             hostInstance: structuredAgentSessionHostInstance()
           },
           ctx.operationReceipt
@@ -191,6 +214,9 @@ export function sendQueuedStructuredAgentMessage(
     },
     // The hand-off the receipt points at, never whichever one the card holds now.
     replay: (ctx, _outcome, receipt) => {
+      if (receipt?.kind === 'queued-draft') {
+        return queuedClearSendAnswer(ctx, operationId, messageId)
+      }
       const submission =
         receipt?.kind === 'journal-row' && receipt.epoch === ctx.journal.epoch
           ? ctx.journal.submissions().find((entry) => entry.submittedSequence === receipt.sequence)
@@ -201,6 +227,14 @@ export function sendQueuedStructuredAgentMessage(
     }
   }
   return mutateQueued(context, caller, params.envelope, plan)
+}
+
+function queuedClearSendAnswer(
+  ctx: AgentSessionTurnContext,
+  operationId: string,
+  messageId: string
+): AgentSessionSendResult {
+  return { clientMessageId: operationId, queued: queuedClearCardState(ctx.journal, messageId) }
 }
 
 /** Delete = discard, with no body in the answer: the card leaving the published
