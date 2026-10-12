@@ -53,6 +53,7 @@ export async function resolveAgentTerminalCreateOptions(
   host: AgentTerminalPlanHost
 ): Promise<TerminalCreateOptions> {
   const store = host.store ?? undefined
+  const rule = opts.wslShellRule
   // Why: raw shell commands like `codex exec` must remain user-authored shell.
   // Only unmanaged, repo-backed, bare agent launches get Settings defaults.
   const callerSuppliedLaunch =
@@ -81,12 +82,7 @@ export async function resolveAgentTerminalCreateOptions(
     projectRuntime:
       opts.shellOverride && store
         ? plannedAgent || opts.launchRuntime
-          ? agentLaunchProjectRuntime(
-              store,
-              workspace,
-              plannedAgent ?? opts.launchAgent,
-              opts.wslShellRule
-            )
+          ? agentLaunchProjectRuntime(store, workspace, plannedAgent ?? opts.launchAgent, rule)
           : resolveLocalProjectRuntimeForWorktreeId(store, workspace.id)
         : undefined,
     cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
@@ -114,13 +110,7 @@ export async function resolveAgentTerminalCreateOptions(
   const runtime =
     opts.launchRuntime ??
     (plannedAgent
-      ? resolveAgentLaunchRuntime(
-          store,
-          workspace,
-          opts.shellOverride,
-          plannedAgent,
-          opts.wslShellRule
-        )
+      ? resolveAgentLaunchRuntime(store, workspace, opts.shellOverride, plannedAgent, rule)
       : undefined)
   const launch =
     plannedAgent && runtime

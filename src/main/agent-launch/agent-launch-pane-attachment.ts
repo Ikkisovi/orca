@@ -19,8 +19,7 @@ const PROCEED: AgentLaunchPaneVerdict = { kind: 'proceed' }
 /** A terminal pane a launch laid out before its process existed. */
 export type AgentLaunchPane = { worktreeId: string; paneKey: string }
 
-/** The host's plan for an agent its pane starts itself (`spawnTrigger: 'window-pane'`); the pane's
- *  spawn reports how it went, which settles the launch. */
+/** The host's plan for an agent its pane starts itself; the spawn reports how it went. */
 export type AgentLaunchPanePlan = {
   plan: TerminalCreateOptions
   committed(spawned: { id: string; incarnationId?: string }): void
@@ -34,8 +33,7 @@ export type AgentLaunchPaneSpawnVerdict =
 
 type RunningLaunch = {
   pane: AgentLaunchPane
-  /** The launch's agent holds the pane (`proceed`), its plan is ready for the pane, or the launch
-   *  is over: whichever comes first. */
+  /** The agent holds the pane (`proceed`), its plan is ready, or the launch is over: first wins. */
   settled: Promise<AgentLaunchPaneSpawnVerdict>
   /** What the launch left for the pane once over, if no process holds it. */
   finished: Promise<AgentLaunchPaneVerdict>
@@ -53,8 +51,7 @@ function paneKeyOf(pane: AgentLaunchPane): string {
 export type RunningAgentLaunchPane = {
   /** The launch's agent runs in the pane: a waiting spawn attaches now, not once the prompt lands. */
   agentBound(): void
-  /** The pane starts the agent itself: its spawn runs this plan. `onClosedByUser` runs if the user
-   *  closes the pane before it does. */
+  /** The pane's spawn runs this plan; `onClosedByUser` runs if the user closes it first. */
   planReady(launch: AgentLaunchPanePlan, onClosedByUser: () => void): void
   /** The launch is over. `verdict` is what an unspawned pane does: `withdrawn` when the host takes
    *  the tab back, `not-started` when the launch failed, else `proceed`. */

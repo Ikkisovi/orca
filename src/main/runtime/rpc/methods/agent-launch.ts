@@ -134,12 +134,10 @@ async function runAgentLaunch(
     ),
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
     ...(callerRendersLaunchedChat(context, intent.agent) ? {} : { callerRendersStructured: false }),
-    // The caller's pane is a terminal pane.
     ...(intent.terminalOnly || view.pane ? { terminalOnly: true } : {}),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
     onSurfacePublished: (surface) => {
       view.early?.surfacePublished(surface)
-      // A plan handed to its pane is recorded when that pane's spawn settles it.
       if (surface.outcome.kind !== 'pane') {
         replaySafe?.recordSurface(withPlacement(surface, view))
       }

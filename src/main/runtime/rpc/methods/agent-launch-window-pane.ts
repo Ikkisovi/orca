@@ -1,9 +1,5 @@
-/**
- * A launch whose pane the caller laid out and starts itself (`spawnTrigger: 'window-pane'`): the
- * host plans, hands the plan to the pane's running launch and answers at once, never waiting on a
- * pane that may mount late or never. The pane's spawn reports how it ended, which settles the launch
- * record; until then the launch stays in flight, so a replay joins it.
- */
+/** A launch whose pane the caller laid out and starts itself (`spawnTrigger: 'window-pane'`): the
+ *  host plans and answers at once, never waiting on a pane that may mount late or never. */
 
 import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../shared/agent-launch-tab-closed'

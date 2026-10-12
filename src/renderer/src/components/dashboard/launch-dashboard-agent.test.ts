@@ -19,6 +19,8 @@ vi.mock('@/store', () => ({
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: mocks.launchAgentInNewTab
 }))
+const toast = vi.hoisted(() => ({ error: vi.fn(), info: vi.fn(), message: vi.fn() }))
+vi.mock('sonner', () => ({ toast }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: mocks.getExecutionHostIdForWorktree
 }))
@@ -45,5 +47,18 @@ describe('launchDashboardAgent', () => {
       worktreeId: 'folder:docs',
       launchSource: 'unknown'
     })
+  })
+
+  // Pinned as it is (STA-10311, pre-existing): the popout bridge drops this answer, so a dashboard
+  // "+" that cannot launch says nothing anywhere.
+  it.each([
+    ['an unknown workspace', () => mocks.getKnownWorktreeById.mockReturnValue(undefined)],
+    ['a launch that opened nothing', () => mocks.launchAgentInNewTab.mockReturnValue(null)]
+  ])('answers false for %s and shows no message', (_case, arrange) => {
+    arrange()
+    expect(launchDashboardAgent({ worktreeId: 'folder:docs', agent: 'codex' })).toBe(false)
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.message).not.toHaveBeenCalled()
   })
 })

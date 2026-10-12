@@ -82,6 +82,7 @@ describe('a launch pane after a restart', () => {
               syscall: 'connect'
             })
       })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a provider double with every member a local spawn reaches.
       setLocalPtyProvider({
         spawn: providerSpawn,
         write: vi.fn(),
@@ -173,14 +174,11 @@ describe('a launch pane after a restart', () => {
         })),
         reportAgentLaunchPaneVerdict: vi.fn()
       }
-      registerPtyHandlers(
-        mainWindow as never,
-        runtime as never,
-        undefined,
-        undefined,
-        undefined,
-        store as never
-      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suite's window double, carrying the members a renderer spawn reaches.
+      const window = mainWindow as never
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a runtime and store carrying only the members a restored pane's spawn reaches.
+      const [spawnRuntime, spawnStore] = [runtime as never, store as never]
+      registerPtyHandlers(window, spawnRuntime, undefined, undefined, undefined, spawnStore)
 
       const mounted = Promise.resolve(
         handlers.get('pty:spawn')!(null, {

@@ -10,8 +10,7 @@ type InFlightAgentLaunch = {
 
 const inFlightByRuntime = new WeakMap<OrcaRuntimeService, Map<string, InFlightAgentLaunch>>()
 
-/** Joins the run already in flight under `key`, else starts `run` under it. A run may keep itself
- *  joinable past its answer, until a settlement it names. */
+/** Joins the run in flight under `key`, else starts `run`, which may stay joinable past its answer. */
 export function joinOrRunAgentLaunch(
   runtime: OrcaRuntimeService,
   launch: { key: string; fingerprint: string },

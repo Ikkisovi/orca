@@ -36,6 +36,17 @@ function restoreProvisionalPtySize(ctx: PtyIpcSpawnState): void {
   }
 }
 
+/** A spawn that joined the pane's winning spawn settles its launch with the winner's PTY. */
+function settleJoinedPaneLaunch(ctx: PtyIpcSpawnState, joined: object): void {
+  if ('id' in joined && typeof joined.id === 'string') {
+    const incarnationId =
+      'incarnationId' in joined && typeof joined.incarnationId === 'string'
+        ? joined.incarnationId
+        : undefined
+    ctx.paneLaunch?.committed({ id: joined.id, ...(incarnationId ? { incarnationId } : {}) })
+  }
+}
+
 export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArgs) {
   const ctx = createPtyIpcSpawnState(deps, args)
   const replacedPaneKey =
@@ -58,6 +69,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
     triggerPtySpawnPushTargetMaterialization(deps, args)
     const early = await beginPtyIpcSpawn(ctx)
     if (early) {
+      settleJoinedPaneLaunch(ctx, early)
       return early
     }
     await preparePtyIpcSpawnPreflight(ctx)
@@ -73,6 +85,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
       // evict the team env assembly created for it — exit/close cleanup keys
       // off handleByPtyId — so every lost race would leak one team forever.
       releaseAbandonedAgentTeamsLeader(ctx)
+      settleJoinedPaneLaunch(ctx, earlyReserved)
       return earlyReserved
     }
     await executePtyIpcSpawn(ctx)

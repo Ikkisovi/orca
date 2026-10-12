@@ -42,6 +42,13 @@ import { TERMINAL_LIFECYCLE_METHODS } from '../runtime/rpc/methods/terminal/term
 import { AGENT_SESSION_METHODS } from '../runtime/rpc/methods/agent-session'
 import { AGENT_LAUNCH_METHODS } from '../runtime/rpc/methods/agent-launch'
 import { openTestAgentSessionRecordStore } from '../runtime/agent-session-record-store-test-harness'
+import { agentLaunchOperationCallerKey } from '../runtime/rpc/methods/agent-launch-replay'
+import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
+import {
+  makePaneSpawnReservationKey,
+  paneSpawnReservationsByOwnerKey,
+  reservePaneSpawn
+} from './pty/pane/spawn-reservation'
 import { applyManagedDataAccountEnvironment } from '../managed-data-accounts/launch-environment'
 import { probeOpenCodeLaunchCapabilities } from '../opencode/opencode-launch-capabilities'
 import {
@@ -268,56 +275,143 @@ describe('host lane: producer call -> runtime controller -> provider', () => {
   })
 })
 
+/** The window's `agent.launchReplay`, answered by the host with the pane outcome. */
+async function launchIntoPane(
+  lanes: ParityLanes,
+  params: Record<string, unknown>
+): Promise<() => AgentSessionOperationRow | null> {
+  const ledger = await openTestAgentSessionRecordStore(await mkdtemp(join(tmpdir(), 'parity-')))
+  vi.spyOn(lanes.runtime, 'openAgentSessionRecordStore').mockResolvedValue(ledger)
+  vi.spyOn(lanes.runtime, 'openedAgentSessionRecordStore').mockReturnValue(ledger)
+  const dispatcher = new RpcDispatcher({ runtime: lanes.runtime, methods: AGENT_LAUNCH_METHODS })
+  const operationId = `${Date.now()}-${'0'.repeat(32)}`
+  const response = await dispatcher.dispatch(
+    {
+      id: 'parity',
+      authToken: 'token',
+      method: 'agent.launchReplay',
+      params: { ...params, operationId }
+    },
+    {
+      clientId: 'desktop-renderer',
+      caller: DESKTOP_RPC_CALLER,
+      clientKind: 'runtime',
+      clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
+    }
+  )
+  expect(response.ok ? response.result : response.error).toMatchObject({
+    outcome: { kind: 'pane' }
+  })
+  return () =>
+    ledger.getOperationRow(
+      agentLaunchOperationCallerKey({ caller: DESKTOP_RPC_CALLER }),
+      operationId
+    )
+}
+
+const PANE_TRIGGER_CASES = [...WINDOW_LAUNCH_CASES, ...PLUS_LAUNCH_CASES].filter((c) => c.row !== 6)
+
 // C2 re-pins rows 1 and 2 on the pane trigger: the host plans from what the window sends, and the
 // pane's spawn runs that plan, never the window's own command, reaching the provider as before.
 describe('pane-trigger lane: window launch -> host plan -> pane spawn -> provider', () => {
   const suite = setupPtyIpcSuite()
   afterEach(() => restoreMainPlatform())
 
-  it.each(
-    [...WINDOW_LAUNCH_CASES, ...PLUS_LAUNCH_CASES]
-      .filter((c) => c.row !== 6)
-      .map((c) => ({ c, label: `row ${c.row}: ${c.name}` }))
-  )('$label', async ({ c }) => {
+  it.each(PANE_TRIGGER_CASES.map((c) => ({ c, label: `row ${c.row}: ${c.name}` })))(
+    '$label',
+    async ({ c }) => {
+      setMainPlatform(c.client)
+      const lanes = startParityLanes(suite, { workspace: c.workspace, settings: c.settings })
+      await launchIntoPane(lanes, paneLaunchParams(c))
+      const request = windowSpawnRequest(c)
+      // The window still queues its own line; main must run the host's plan instead.
+      await lanes.spawnWindow({
+        ...request,
+        command: 'window-command-not-run',
+        launchConfig: undefined,
+        telemetry: undefined
+      })
+
+      expect(await providerFacts(lanes.provider)).toEqual(
+        expectedWindowProvider(request, c.provider, c.request.agentEnv ?? {})
+      )
+      expect(trackMock.mock.calls).toEqual([['agent_started', request.telemetry]])
+    }
+  )
+
+  it("on Windows, runs the plan's shell whatever shell the pane's request names", async () => {
+    const c = PANE_TRIGGER_CASES.find((entry) => entry.name === 'Windows C: repo, project WSL')!
     setMainPlatform(c.client)
     const lanes = startParityLanes(suite, { workspace: c.workspace, settings: c.settings })
-    const ledger = await openTestAgentSessionRecordStore(await mkdtemp(join(tmpdir(), 'parity-')))
-    vi.spyOn(lanes.runtime, 'openAgentSessionRecordStore').mockResolvedValue(ledger)
-    vi.spyOn(lanes.runtime, 'openedAgentSessionRecordStore').mockReturnValue(ledger)
-    const dispatcher = new RpcDispatcher({ runtime: lanes.runtime, methods: AGENT_LAUNCH_METHODS })
-    const response = await dispatcher.dispatch(
-      {
-        id: 'parity',
-        authToken: 'token',
-        method: 'agent.launchReplay',
-        params: {
-          ...paneLaunchParams(c),
-          operationId: `${Date.now()}-0123456789abcdef0123456789abcdef`
-        }
-      },
-      {
-        clientId: 'desktop-renderer',
-        caller: DESKTOP_RPC_CALLER,
-        clientKind: 'runtime',
-        clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
-      }
-    )
-    expect(response.ok ? response.result : response.error).toMatchObject({
-      outcome: { kind: 'pane' }
+    await launchIntoPane(lanes, paneLaunchParams(c))
+    const { projectRuntime: _sent, ...request } = windowSpawnRequest(c)
+    await lanes.spawnWindow({ ...request, shellOverride: 'cmd.exe' })
+
+    expect(await providerFacts(lanes.provider)).toMatchObject({
+      shellOverride: 'wsl.exe',
+      terminalWindowsWslDistro: 'Ubuntu'
     })
+  })
+
+  it('settles the launch with the PTY of a spawn its pane joined', async () => {
+    const c = PANE_TRIGGER_CASES.find((entry) => entry.name === 'menu "+", macOS repo')!
+    setMainPlatform(c.client)
+    const lanes = startParityLanes(suite, { workspace: c.workspace, settings: c.settings })
+    const row = await launchIntoPane(lanes, paneLaunchParams(c))
     const request = windowSpawnRequest(c)
-    // The window still queues its own line; main must run the host's plan instead.
+    // Another spawn of the same pane already holds it.
+    const key = makePaneSpawnReservationKey(
+      String(request.worktreeId),
+      null,
+      `${String(request.tabId)}:${String(request.leafId)}`
+    )!
+    const winner = reservePaneSpawn(key)
+    try {
+      const joined = lanes.spawnWindow(request)
+      await vi.waitFor(() => expect(row()?.outcome.status).toBe('unknown'))
+      winner.resolve({ id: 'pty-winner' })
+      await joined
+      await vi.waitFor(() =>
+        expect(row()?.outcome).toMatchObject({
+          status: 'succeeded',
+          launch: { outcome: { kind: 'terminal', ptyId: 'pty-winner' } }
+        })
+      )
+    } finally {
+      paneSpawnReservationsByOwnerKey.delete(key)
+    }
+  })
+
+  // The launch most likely to break: the floating sentinel has no repo or folder behind it.
+  it('row 1: floating "Open <agent>" plans for the floating workspace as the window did', async () => {
+    const plus = PANE_TRIGGER_CASES.find((entry) => entry.name === 'menu "+", macOS repo')!
+    setMainPlatform('darwin')
+    const lanes = startParityLanes(suite, { workspace: plus.workspace, settings: plus.settings })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both are real (protected) runtime methods; only the floating folder is fixed, the scope is the runtime's own.
+    const runtime = lanes.runtime as unknown as Record<string, () => unknown>
+    vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockRestore()
+    const floatingPath = vi
+      .spyOn(runtime, 'resolveFloatingWorkspacePath')
+      .mockResolvedValue('/home/alice')
+    const floating = {
+      ...paneLaunchParams(plus),
+      target: { kind: 'existing', worktree: 'id:global-floating-terminal' }
+    }
+    await launchIntoPane(lanes, floating)
+    const request = windowSpawnRequest(plus)
     await lanes.spawnWindow({
       ...request,
-      command: 'window-command-not-run',
-      launchConfig: undefined,
-      telemetry: undefined
+      worktreeId: 'global-floating-terminal',
+      cwd: '/home/alice',
+      command: 'window-command-not-run'
     })
 
-    expect(await providerFacts(lanes.provider)).toEqual(
-      expectedWindowProvider(request, c.provider, c.request.agentEnv ?? {})
-    )
-    expect(trackMock.mock.calls).toEqual([['agent_started', request.telemetry]])
+    expect(await providerFacts(lanes.provider)).toMatchObject({
+      command: plus.request.command,
+      cwd: '/home/alice',
+      shellOverride: '/bin/zsh'
+    })
+    expect(floatingPath).toHaveBeenCalled()
   })
 })
 

@@ -66,6 +66,29 @@ describe('fields the launch fingerprint covers', () => {
   })
 })
 
+describe("agent.launch's terminal inputs", () => {
+  it.each([
+    { spawnTrigger: 'window-pane' },
+    { extraAgentArgs: '--verbose' },
+    { terminalOnly: true },
+    { promptCarry: 'window' },
+    { wslShellRule: 'window' }
+  ])('separates a launch that sends %o, which changes what runs or who starts it', (field) => {
+    expect(computeAgentLaunchFingerprint({ ...BASE, ...field })).not.toBe(
+      computeAgentLaunchFingerprint(BASE)
+    )
+  })
+
+  it('ignores the title and request kind, which only name and attribute the tab', () => {
+    const named: AgentLaunchFingerprintInput & { title: string; requestKind: string } = {
+      ...BASE,
+      title: 'worker-1',
+      requestKind: 'resume'
+    }
+    expect(computeAgentLaunchFingerprint(named)).toBe(computeAgentLaunchFingerprint(BASE))
+  })
+})
+
 describe('fields the launch fingerprint deliberately ignores', () => {
   it('does not separate two launches that differ only in launchSource', () => {
     // Telemetry. Two buttons producing the same launch are one operation, and a retry that got
