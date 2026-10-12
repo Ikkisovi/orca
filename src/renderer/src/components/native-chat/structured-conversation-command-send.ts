@@ -131,8 +131,11 @@ export async function sendStructuredConversationCommand(input: {
     return { accepted: false, error: heldCommandText(input.command, 'working') }
   }
   // The message ahead reads as sending, and Send is busy until the host has it; nothing is armed.
+  // A /clear still says so in words, as it did before it could wait in line.
   if (input.hold === 'ahead') {
-    return { accepted: false, error: null }
+    return input.command === 'clear'
+      ? refused(heldCommandText('clear', 'sending'), 'sending')
+      : { accepted: false, error: null }
   }
   if (input.hold !== null) {
     // Each hold here is named for the cause it waits on.

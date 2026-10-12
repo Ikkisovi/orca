@@ -617,19 +617,22 @@ describe('a /compact against a host that holds commands in line', () => {
     expect(result.current.commandRefusalCauses).toMatchObject({ sending: false, retry: false })
   })
 
-  it('/clear mid-turn is still refused here, and never asks to wait', async () => {
+  it('/clear mid-turn goes to the host asking to wait, as /compact does', async () => {
+    answerCommands({
+      command: 'clear',
+      state: 'completed',
+      queued: { messageId: 'operation-1', position: 1, state: 'waiting' }
+    })
     const { result } = render()
+    let outcome: unknown
     await act(async () => {
-      await result.current.runConversationCommand('clear')
+      outcome = await result.current.runConversationCommand('clear')
     })
-    expect(commandCalls()).toHaveLength(0)
-    items = []
-    answerCommands({ command: 'clear', state: 'completed' })
-    const idle = render()
-    await act(async () => {
-      await idle.result.current.runConversationCommand('clear')
+    expect(outcome).toEqual({ accepted: true, error: null })
+    expect(ConversationCommandParams.parse(commandCalls()[0])).toMatchObject({
+      command: 'clear',
+      delivery: 'queue-if-active'
     })
-    expect(ConversationCommandParams.parse(commandCalls()[0])).not.toHaveProperty('delivery')
   })
 
   it('a rewind on its way holds /clear and /compact alike, in the same words, and writes nothing', async () => {
