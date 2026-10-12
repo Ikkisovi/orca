@@ -19,12 +19,9 @@ const EMPTY: CodexMaintenanceEntry = {
   error: null
 }
 let entries: ReadonlyMap<string, CodexMaintenanceEntry> = new Map()
-let logTarget: CodexMaintenanceTarget | null = null
 const listeners = new Set<() => void>()
 const reads = new Map<string, Promise<void>>()
 const polls = new Map<string, ReturnType<typeof setTimeout>>()
-const revisions = new Map<string, number>()
-let revisionId = 0
 
 export function getCodexMaintenanceHostBusy(target: CodexMaintenanceTarget): boolean {
   const entry = getCodexMaintenanceEntry(codexMaintenanceTargetKey(target))
@@ -32,23 +29,8 @@ export function getCodexMaintenanceHostBusy(target: CodexMaintenanceTarget): boo
   return entry.starting || (!entry.error && (job?.phase === 'queued' || job?.phase === 'running'))
 }
 
-function nextRevision(key: string): number {
-  const revision = ++revisionId
-  revisions.set(key, revision)
-  return revision
-}
-
 function publish(key: string, patch: Partial<CodexMaintenanceEntry>): void {
   const next = new Map(entries).set(key, { ...getCodexMaintenanceEntry(key), ...patch })
-  for (const [id, entry] of next) {
-    if (next.size <= 64) {
-      break
-    }
-    if (id !== key && !entry.starting && !polls.has(id) && !reads.has(id)) {
-      next.delete(id)
-      revisions.delete(id)
-    }
-  }
   entries = next
   for (const listener of listeners) {
     listener()
@@ -72,16 +54,6 @@ export function subscribeCodexMaintenance(listener: () => void): () => void {
 export function getCodexMaintenanceEntry(key: string): CodexMaintenanceEntry {
   return entries.get(key) ?? EMPTY
 }
-export function getCodexMaintenanceLogTarget(): CodexMaintenanceTarget | null {
-  return logTarget
-}
-export function openCodexMaintenanceLog(target: CodexMaintenanceTarget | null): void {
-  logTarget = target
-  for (const listener of listeners) {
-    listener()
-  }
-}
-
 function runningJob(state: CodexMaintenanceState): string | null {
   const job = state.currentJob === undefined ? state.job : state.currentJob
   return job?.phase === 'queued' || job?.phase === 'running' ? job.id : null
@@ -106,10 +78,9 @@ function scheduleRead(target: CodexMaintenanceTarget, jobId: string, failures = 
       if (getCodexMaintenanceEntry(key).starting) {
         return
       }
-      const revision = nextRevision(key)
-      void callCodexMaintenance(target, { operation: 'read', jobId })
+      const read = callCodexMaintenance(target, { operation: 'read', jobId })
         .then((state) => {
-          if (revisions.get(key) !== revision) {
+          if (reads.get(key) !== read) {
             return
           }
           acceptState(key, state)
@@ -118,11 +89,12 @@ function scheduleRead(target: CodexMaintenanceTarget, jobId: string, failures = 
             scheduleRead(target, running)
           } else {
             refreshDetectedAgents(target)
+            reads.delete(key)
             void refreshCodexMaintenance(target)
           }
         })
         .catch((error: unknown) => {
-          if (revisions.get(key) !== revision) {
+          if (reads.get(key) !== read) {
             return
           }
           publishFailure(key, error)
@@ -130,6 +102,12 @@ function scheduleRead(target: CodexMaintenanceTarget, jobId: string, failures = 
             scheduleRead(target, jobId, failures + 1)
           }
         })
+        .finally(() => {
+          if (reads.get(key) === read) {
+            reads.delete(key)
+          }
+        })
+      reads.set(key, read)
     }, 1_000)
   )
 }
@@ -145,10 +123,9 @@ export function refreshCodexMaintenance(target: CodexMaintenanceTarget): Promise
   }
   clearTimeout(polls.get(key))
   polls.delete(key)
-  const revision = nextRevision(key)
   const read = callCodexMaintenance(target, { operation: 'status' })
     .then((state) => {
-      if (revisions.get(key) !== revision) {
+      if (reads.get(key) !== read) {
         return
       }
       acceptState(key, state)
@@ -158,7 +135,7 @@ export function refreshCodexMaintenance(target: CodexMaintenanceTarget): Promise
       }
     })
     .catch((error: unknown) => {
-      if (revisions.get(key) === revision) {
+      if (reads.get(key) === read) {
         publishFailure(key, error)
       }
     })
@@ -173,20 +150,15 @@ export function refreshCodexMaintenance(target: CodexMaintenanceTarget): Promise
 
 export function startCodexMaintenance(target: CodexMaintenanceTarget): void {
   const key = codexMaintenanceTargetKey(target)
-  openCodexMaintenanceLog(target)
   if (getCodexMaintenanceHostBusy(target)) {
     return
   }
   clearTimeout(polls.get(key))
   polls.delete(key)
   reads.delete(key)
-  const revision = nextRevision(key)
   publish(key, { starting: true, error: null })
   void callCodexMaintenance(target, { operation: 'start' })
     .then((state) => {
-      if (revisions.get(key) !== revision) {
-        return
-      }
       acceptState(key, state)
       const running = runningJob(state)
       if (running) {
@@ -210,7 +182,5 @@ export function resetCodexMaintenanceStoreForTests(): void {
   }
   polls.clear()
   reads.clear()
-  revisions.clear()
   entries = new Map()
-  logTarget = null
 }

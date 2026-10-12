@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { codexCliInstallation } from '../../shared/codex-cli-installation'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
@@ -14,12 +15,14 @@ import { structuredAgentSessionStartFailure } from '../native-chat/agent-session
 import { CodexCliInstallationError, requireSupportedCodexCli } from './codex-cli-installation-error'
 import { createCodexStructuredLaunchResolver } from './codex-structured-launch-resolution'
 import { identityFor } from './codex-structured-session-adapter-fixture'
+import { openCodexAppServerConnection } from './codex-app-server-connection'
 
 vi.mock('../preflight/codex-cli-installation', () => ({ readCodexCliInstallation: vi.fn() }))
 beforeEach(() => {
   vi.mocked(readCodexCliInstallation).mockReset()
   vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(true, '0.136.0'))
 })
+afterEach(() => vi.restoreAllMocks())
 
 function record(): AgentSessionRecord {
   return {
@@ -31,12 +34,10 @@ function record(): AgentSessionRecord {
 }
 
 describe('Codex structured launch version admission', () => {
-  it.each([null, '0.100.0', '0.135.0'])(
+  it.each(['0.100.0', '0.135.0'])(
     'refuses %s with concise repair copy and both version facts',
     async (version) => {
-      vi.mocked(readCodexCliInstallation).mockResolvedValue(
-        codexCliInstallation(version !== null, version)
-      )
+      vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(true, version))
       const caught = await requireSupportedCodexCli({ program: '/execution-host/codex' }).catch(
         (error: unknown) => error
       )
@@ -44,9 +45,7 @@ describe('Codex structured launch version admission', () => {
       const wording = { record: record(), newSession: true }
       const result = failedAcquisitionRefusal(caught, wording)
       expect(result?.refusal.message).toBe(
-        version === null
-          ? "Codex isn't installed."
-          : `Codex ${version} is too old for chats. Update to 0.136.0 or newer.`
+        `Codex ${version} is too old for chats. Update to 0.136.0 or newer.`
       )
       expect(result?.refusal.message).not.toContain('Settings → Agents')
       expect(result?.refusal.message).not.toContain('codex update')
@@ -62,6 +61,37 @@ describe('Codex structured launch version admission', () => {
       ).toBe(failure.reason)
     }
   )
+
+  it('leaves a missing Codex to the existing spawn refusal', async () => {
+    vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(false, null))
+    await expect(requireSupportedCodexCli({ program: 'codex' })).resolves.toBeUndefined()
+  })
+
+  it('reports Windows ENOENT through the existing not-found failure with one explanation', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(false, null))
+    await requireSupportedCodexCli({ program: 'codex.exe' })
+    const child = createFakePipedChild()
+    Object.assign(child, { pid: undefined })
+    const opening = openCodexAppServerConnection(
+      { command: 'codex.exe', args: ['app-server'] },
+      {},
+      () => child
+    ).catch((error: unknown) => error)
+    child.emit(
+      'error',
+      Object.assign(new Error('spawn codex.exe ENOENT'), { code: 'ENOENT', path: 'codex.exe' })
+    )
+    child.emit('close', -2, null)
+    const failure = structuredAgentSessionStartFailure(
+      { error: await opening },
+      { agentName: 'Codex' }
+    )
+    expect(failure.rejection.kind).toBe('cliMissing')
+    expect(failure.reason).toBe(
+      "Codex wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents."
+    )
+  })
 
   it('allows an unknown version with a log line', async () => {
     vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(true, null))

@@ -8,19 +8,16 @@ import {
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
-export type CodexMaintenanceTarget = RuntimeClientTarget & { cwd?: string }
+export type CodexMaintenanceTarget = RuntimeClientTarget
 
 export function codexMaintenanceTargetKey(target: CodexMaintenanceTarget): string {
-  const host =
-    target.kind === 'environment' ? `runtime:${target.environmentId}:codex` : 'local:codex'
-  return target.cwd ? `${host}:${JSON.stringify(target.cwd)}` : host
+  return target.kind === 'environment' ? `runtime:${target.environmentId}:codex` : 'local:codex'
 }
 
 export async function callCodexMaintenance(
   target: CodexMaintenanceTarget,
   params: CodexMaintenanceParams
 ): Promise<CodexMaintenanceState> {
-  params = { ...params, ...(target.cwd ? { cwd: target.cwd } : {}) }
   if (target.kind === 'environment') {
     const supported = await runtimeEnvironmentSupportsCapability(
       target.environmentId,

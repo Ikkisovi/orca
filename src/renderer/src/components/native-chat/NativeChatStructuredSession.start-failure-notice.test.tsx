@@ -168,14 +168,18 @@ it.each([null, '0.100.0', '0.135.0'])(
   'states a missing or too-old Codex (installed version %s) in the existing failure notice',
   async (installedVersion) => {
     const failure: AgentSessionFailureFact = {
-      kind: 'startFailed',
-      refusal: {
-        code: 'agent_session_operation_invalid',
-        details: {
-          reason: 'attachFailed',
-          codexInstallation: { installedVersion, minimumVersion: '0.136.0' }
-        }
-      }
+      kind: installedVersion === null ? 'cliMissing' : 'startFailed',
+      ...(installedVersion === null
+        ? {}
+        : {
+            refusal: {
+              code: 'agent_session_operation_invalid',
+              details: {
+                reason: 'attachFailed',
+                codexInstallation: { installedVersion, minimumVersion: '0.136.0' }
+              }
+            }
+          })
     }
     const { text } = agentSessionFailureWords(failure, { agentName: 'Codex', surface: 'row' })
     renderPane([rejected('codex-message', text, failure)], 'codex')
@@ -183,10 +187,12 @@ it.each([null, '0.100.0', '0.135.0'])(
     expect(within(row).getByText(text)).toBeTruthy()
     expect(text).toContain(
       installedVersion === null
-        ? "Codex isn't installed."
+        ? "Codex wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents."
         : `Codex ${installedVersion} is too old for chats. Update to 0.136.0 or newer.`
     )
-    expect(text).not.toContain('Settings → Agents')
+    if (installedVersion !== null) {
+      expect(text).not.toContain('Settings → Agents')
+    }
     expect(text).not.toContain('codex update')
   }
 )

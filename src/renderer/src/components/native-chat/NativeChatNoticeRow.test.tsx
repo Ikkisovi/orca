@@ -8,7 +8,50 @@ import { MessageRow } from './NativeChatMessageRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { i18n } from '@/i18n/i18n'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import { renderStatus } from './native-chat-notice-row.test-fixture'
+import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
+import {
+  NativeChatOrcaStopContext,
+  type NativeChatOrcaStopView
+} from './native-chat-orca-stop-context'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+
+function orcaStopView(
+  hostLabel: string | null,
+  continueAvailable: boolean,
+  remoteHost: boolean
+): NativeChatOrcaStopView {
+  return { hostLabel, remoteHost, continueAvailable }
+}
+
+function renderStatus(
+  body: AgentJournalStatusItem,
+  hostLabel: string | null = null,
+  continueAvailable = false,
+  remoteHost = false,
+  agentName?: string
+) {
+  const [message] = projectStructuredItemsToNativeChat([
+    {
+      itemId: 'notice',
+      sequence: 1,
+      revision: 1,
+      observedAt: 1,
+      body,
+      turnScope: { kind: 'turn', turnItemId: 'cut-turn' }
+    }
+  ])
+  const view = orcaStopView(hostLabel, continueAvailable, remoteHost)
+  return render(
+    <NativeChatOrcaStopContext.Provider value={view}>
+      <MessageRow
+        message={message!}
+        agentName={agentName}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+      />
+    </NativeChatOrcaStopContext.Provider>
+  )
+}
 
 afterEach(async () => {
   cleanup()
@@ -338,4 +381,42 @@ describe('notice rows', () => {
     expect(screen.getByText(words)).toHaveClass('text-muted-foreground', 'text-sm')
     expect(screen.queryByText('Words an older host wrote')).toBeNull()
   })
+})
+
+describe('Codex installation in notice rows', () => {
+  it.each([null, '0.135.0'])(
+    'shows the plain host failure through the ordinary notice row: %s',
+    (installedVersion) => {
+      const failure: AgentSessionFailureFact = {
+        kind: installedVersion === null ? 'cliMissing' : 'startFailed',
+        ...(installedVersion === null
+          ? {}
+          : {
+              refusal: {
+                code: 'agent_session_operation_invalid',
+                details: {
+                  reason: 'attachFailed',
+                  codexInstallation: { installedVersion, minimumVersion: '0.136.0' }
+                }
+              }
+            })
+      }
+      const text = installedVersion
+        ? 'Codex 0.135.0 is too old for chats. Update to 0.136.0 or newer.'
+        : "Codex wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents."
+      renderStatus(
+        {
+          kind: 'status',
+          tone: 'error',
+          ...agentSessionFailureWords(failure, { agentName: 'Codex', surface: 'row' })
+        },
+        null,
+        false,
+        false,
+        'Codex'
+      )
+      expect(screen.getByText(text)).toBeInTheDocument()
+      expect(screen.queryByRole('button')).toBeNull()
+    }
+  )
 })

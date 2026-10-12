@@ -7,8 +7,7 @@ export const CODEX_INSTALL_COMMAND = 'npm install -g @openai/codex'
 
 export const CodexMaintenanceRequest = z.object({
   operation: z.enum(['status', 'start', 'read']),
-  jobId: z.string().min(1).optional(),
-  cwd: z.string().min(1).optional()
+  jobId: z.string().min(1).optional()
 })
 
 export type CodexMaintenanceParams = z.infer<typeof CodexMaintenanceRequest>
@@ -26,7 +25,6 @@ export type CodexMaintenanceState = {
   canRun: boolean
   job: CodexMaintenanceJob | null
   currentJob?: Pick<CodexMaintenanceJob, 'id' | 'phase'> | null
-  evidence?: { expiresAt: number; configurationId: string; observedAt?: number }
 }
 
 const CodexMaintenanceJobSchema = z
@@ -54,12 +52,5 @@ export const CodexMaintenanceStateSchema = z.object({
       phase: openEnum(['queued', 'running', 'completed', 'unknown'], 'unknown')
     })
     .nullable()
-    .optional(),
-  evidence: z
-    .object({
-      expiresAt: z.number().finite(),
-      configurationId: z.string().min(1),
-      observedAt: z.number().finite().optional()
-    })
     .optional()
 })

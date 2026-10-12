@@ -18,8 +18,7 @@ it('settles an unverifiable job, re-derives whether its owned root is live, and 
     installation: codexCliInstallation(false, null),
     spec: { program: 'fake-installer' }
   })
-  const invalidate = vi.fn()
-  const runner = new CodexMaintenanceRunner({ resolve, invalidate, spawn: vi.fn() })
+  const runner = new CodexMaintenanceRunner({ resolve, spawn: vi.fn() })
   const first = await runner.start()
   await vi.waitFor(async () => {
     const state = await runner.status(first.job?.id)
@@ -30,7 +29,6 @@ it('settles an unverifiable job, re-derives whether its owned root is live, and 
   })
   await expect(runner.start()).rejects.toThrow('still live')
   expect(execute).toHaveBeenCalledOnce()
-  expect(invalidate).toHaveBeenCalledOnce()
   live = false
   execute.mockResolvedValueOnce({
     code: 0,

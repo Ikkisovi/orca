@@ -17,7 +17,7 @@ function fixture(
     spec: { program: process.execPath, args: ['-e', script] }
   })
   const spawn = vi.fn<PipedProcessSpawner>(spawnProcess)
-  const runner = new CodexMaintenanceRunner({ resolve, spawn, invalidate: vi.fn() })
+  const runner = new CodexMaintenanceRunner({ resolve, spawn })
   return { runner, spawn }
 }
 

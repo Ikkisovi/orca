@@ -38,7 +38,6 @@ describe('configured Codex invocation ownership', () => {
     const command = join(root, 'missing-custom-codex')
     await expect(
       resolveCodexMaintenanceCommand({
-        cwd: root,
         commandSettings: { agentCmdOverrides: { codex: command } }
       })
     ).rejects.toThrow('Command setting is not a runnable program')
@@ -48,7 +47,6 @@ describe('configured Codex invocation ownership', () => {
   it('checks the same custom executable, overlay and directory as native invocation', async () => {
     const command = await executable('company-codex')
     await executable('codex')
-    const cwd = root
     const settings: CodexCommandSettings = {
       agentCmdOverrides: { codex: command },
       agentDefaultEnv: { codex: { PATH: root, COMPANY_SELECTION: 'current' } },
@@ -61,12 +59,12 @@ describe('configured Codex invocation ownership', () => {
       resolveCommand: sources.resolveCommand,
       resolveEnvironment: environment.resolveCodexEnvironment
     })
-    const maintenance = await resolveCodexMaintenanceCommand({ cwd, commandSettings: settings })
+    const maintenance = await resolveCodexMaintenanceCommand({ commandSettings: settings })
     expect(maintenance.installation.status).toBe('ready')
     expect(native.command).toBe(command)
     const probe = run.mock.calls.at(-1)?.[0]
     expect(probe.program).toBe(native.command)
-    expect(probe.cwd).toBe(cwd)
+    expect(probe.cwd).toBe(process.cwd())
     expect(probe.env.COMPANY_SELECTION).toBe(native.environment?.COMPANY_SELECTION)
     expect(probe.env.PATH).toBe(native.environment?.PATH)
     expect(probe.env.SHELL_SETTING).toBe('inherited')
@@ -75,7 +73,7 @@ describe('configured Codex invocation ownership', () => {
   it('honors the configured PATH even without an explicit Command', async () => {
     const command = await executable('codex')
     const settings: CodexCommandSettings = { agentDefaultEnv: { codex: { PATH: root } } }
-    await resolveCodexMaintenanceCommand({ cwd: root, commandSettings: settings })
+    await resolveCodexMaintenanceCommand({ commandSettings: settings })
     expect(run.mock.calls.at(-1)?.[0].program).toBe(command)
   })
 })

@@ -1,4 +1,3 @@
-import { useSyncExternalStore } from 'react'
 import { Loader2 } from 'lucide-react'
 import {
   Dialog,
@@ -8,31 +7,28 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
-import { codexMaintenanceTargetKey } from '@/lib/codex-maintenance-client'
-import { CODEX_INSTALL_COMMAND } from '../../../../shared/codex-cli-maintenance'
 import {
-  getCodexMaintenanceEntry,
-  getCodexMaintenanceHostBusy,
-  getCodexMaintenanceLogTarget,
-  openCodexMaintenanceLog,
-  subscribeCodexMaintenance
-} from '@/lib/codex-maintenance-store'
+  CODEX_INSTALL_COMMAND,
+  type CodexMaintenanceState
+} from '../../../../shared/codex-cli-maintenance'
 import { codexMaintenanceLabel } from './codex-maintenance-copy'
-import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatCopyButton } from '../native-chat/NativeChatCopyButton'
 
-export function CodexMaintenanceLogDialog(): React.JSX.Element {
-  const target = useSyncExternalStore(
-    subscribeCodexMaintenance,
-    getCodexMaintenanceLogTarget,
-    getCodexMaintenanceLogTarget
-  )
-  const snapshot = () => getCodexMaintenanceEntry(target ? codexMaintenanceTargetKey(target) : '')
-  const entry = useSyncExternalStore(subscribeCodexMaintenance, snapshot, snapshot)
-  const job = entry.logJob
-  const busySnapshot = () => Boolean(target && getCodexMaintenanceHostBusy(target))
-  const busy = useSyncExternalStore(subscribeCodexMaintenance, busySnapshot, busySnapshot)
+export function CodexMaintenanceLogDialog({
+  open,
+  onOpenChange,
+  job,
+  error,
+  busy
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  job: CodexMaintenanceState['job']
+  error: string | null
+  busy: boolean
+}): React.JSX.Element {
   const message =
-    entry.error || job?.error
+    error || job?.error
       ? translate('codex.maintenance.installFailed', 'Codex could not be installed. Try again.')
       : job?.phase === 'completed'
         ? translate('codex.maintenance.exitCode', 'Command exited with code {{code}}', {
@@ -43,14 +39,7 @@ export function CodexMaintenanceLogDialog(): React.JSX.Element {
           : codexMaintenanceLabel(true)
   const output = job?.output ?? ''
   return (
-    <Dialog
-      open={target !== null}
-      onOpenChange={(open) => {
-        if (!open) {
-          openCodexMaintenanceLog(null)
-        }
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{translate('codex.maintenance.logTitle', 'Codex setup log')}</DialogTitle>

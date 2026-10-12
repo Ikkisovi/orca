@@ -114,14 +114,6 @@ export function NativeChatNoticeRow({
   const { hostLabel, remoteHost, continueAvailable } = orcaStopView
   const named = orcaStop !== undefined && hostLabel !== null
   const failure = readWholeAgentSessionFailureFact(block.failure)
-  const rowAction =
-    claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind)
-      ? {
-          label: nativeChatClaudeSignInLabel(claudeSignIn),
-          disabled: claudeSignIn.signingIn,
-          onClick: claudeSignIn.signIn
-        }
-      : undefined
   // Only reword auth text fully described by its fact; host text may also carry command advice.
   const authSurface =
     failure?.kind === 'notSignedIn'
@@ -163,15 +155,15 @@ export function NativeChatNoticeRow({
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
         <p className="min-w-0 whitespace-pre-wrap break-words">{text}</p>
       </div>
-      {rowAction ? (
+      {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
         <Button
           type="button"
           variant="outline"
           size="xs"
-          disabled={rowAction.disabled}
-          onClick={rowAction.onClick}
+          disabled={claudeSignIn.signingIn}
+          onClick={claudeSignIn.signIn}
         >
-          {rowAction.label}
+          {nativeChatClaudeSignInLabel(claudeSignIn)}
         </Button>
       ) : null}
       {block.providerFrame ? (

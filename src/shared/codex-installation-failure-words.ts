@@ -10,7 +10,8 @@ export function codexInstallationFailureWords(
       ? refusal.details?.codexInstallation
       : undefined
   return installation
-    ? say(installation.installedVersion === null ? 'codexCliMissing' : 'codexCliTooOld', {
+    ? say(installation.installedVersion === null ? 'cliMissing' : 'codexCliTooOld', {
+        agent: 'Codex',
         installedVersion: installation.installedVersion ?? '',
         minimumVersion: installation.minimumVersion
       })

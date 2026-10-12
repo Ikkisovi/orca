@@ -27,7 +27,6 @@ export const AGENT_SESSION_FAILURE_COPY = {
   sendAgainToTryOnceMore: 'Send your message again to try once more.',
   couldNotStart: "{{agent}} couldn't start.",
   couldNotRestart: "{{agent}} couldn't restart.",
-  codexCliMissing: "Codex isn't installed.",
   codexCliTooOld:
     'Codex {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.',
   argumentsUnsupportedOption: 'Saved Arguments contain an unsupported option ({{option}}).',

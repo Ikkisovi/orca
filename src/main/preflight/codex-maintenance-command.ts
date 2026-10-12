@@ -8,12 +8,11 @@ import type { CodexCliInstallation } from '../../shared/codex-cli-installation'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { resolveCodexStructuredInvocation } from '../codex/codex-structured-launch-resolution'
-import { readCodexCliInstallationEvidence } from './codex-cli-installation'
+import { readCodexCliInstallation } from './codex-cli-installation'
 
-export type CodexMaintenanceContext = { cwd?: string; commandSettings?: CodexCommandSettings }
+export type CodexMaintenanceContext = { commandSettings?: CodexCommandSettings }
 type ResolvedCodexMaintenanceCommand = {
   installation: CodexCliInstallation
-  evidence?: { expiresAt: number; configurationId: string; observedAt?: number }
   /** The install to run; null unless Codex is missing. */
   spec: ProcessSpec | null
 }
@@ -21,14 +20,14 @@ type ResolvedCodexMaintenanceCommand = {
 export async function resolveCodexMaintenanceCommand(
   context: CodexMaintenanceContext = {}
 ): Promise<ResolvedCodexMaintenanceCommand> {
-  const cwd = context.cwd ?? process.cwd()
+  const cwd = process.cwd()
   const settings = context.commandSettings ?? {}
   const sources = configuredCodexInvocationSources(() => settings)
   const { command, environment } = await resolveCodexStructuredInvocation({
     resolveCommand: sources.resolveCommand,
     resolveEnvironment: createStructuredAgentEnvironmentResolvers(sources).resolveCodexEnvironment
   })
-  const { installation, ...evidence } = await readCodexCliInstallationEvidence({
+  const installation = await readCodexCliInstallation({
     program: command,
     cwd,
     env: environment
@@ -38,7 +37,6 @@ export async function resolveCodexMaintenanceCommand(
     installation.status === 'missing' && !hasExplicitTuiLaunchCommand(settings, 'codex')
   return {
     installation,
-    evidence: { ...evidence, observedAt: Date.now() },
     spec: installable
       ? {
           program: resolveCliCommand('npm', { pathEnv: environment.PATH ?? environment.Path }),

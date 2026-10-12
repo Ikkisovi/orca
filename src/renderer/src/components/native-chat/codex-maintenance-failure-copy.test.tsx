@@ -10,7 +10,9 @@ import {
 } from '@/lib/codex-maintenance-store'
 import { CodexMaintenanceRow } from '../settings/CodexMaintenanceRow'
 import { NativeChatComposerNotices } from './NativeChatComposerNotices'
-import { CodexMaintenanceLogDialog } from './CodexMaintenanceLogDialog'
+
+import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
+import { structuredSessionNotices } from './native-chat-structured-session-notices'
 
 const { call, refreshAgents } = vi.hoisted(() => ({
   call: vi.fn(),
@@ -18,8 +20,7 @@ const { call, refreshAgents } = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/codex-maintenance-client', () => ({
   callCodexMaintenance: call,
-  codexMaintenanceTargetKey: (target: { kind: string; cwd?: string }) =>
-    `${target.kind}:codex${target.cwd ? `:${target.cwd}` : ''}`
+  codexMaintenanceTargetKey: (target: { kind: string }) => `${target.kind}:codex`
 }))
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -30,19 +31,10 @@ vi.mock('@/store', () => ({
 const TARGET = { kind: 'local' } as const
 function state(installed: boolean, version: string | null): CodexMaintenanceState {
   return {
-    evidence: { expiresAt: Date.now() + 30_000, configurationId: 'config' },
     installation: codexCliInstallation(installed, version),
     canRun: !installed,
     job: null
   }
-}
-function SettingsRow() {
-  return (
-    <>
-      <CodexMaintenanceRow target={TARGET} />
-      <CodexMaintenanceLogDialog />
-    </>
-  )
 }
 beforeEach(() => {
   call.mockReset()
@@ -59,8 +51,6 @@ async function flush() {
   })
 }
 
-import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
-import { structuredSessionNotices } from './native-chat-structured-session-notices'
 describe('Codex install failure copy', () => {
   it.each([
     { error: 'spawn C:\\tools\\node.exe EACCES', exitCode: null },
@@ -81,7 +71,7 @@ describe('Codex install failure copy', () => {
       )
       const write = vi.fn().mockResolvedValue(undefined)
       Object.assign(window, { api: { ui: { writeClipboardText: write } } })
-      render(<SettingsRow />)
+      render(<CodexMaintenanceRow target={TARGET} />)
       await flush()
       fireEvent.click(screen.getByRole('button', { name: 'Install Codex' }))
       expect(
@@ -96,19 +86,46 @@ describe('Codex install failure copy', () => {
       await waitFor(() => expect(write).toHaveBeenCalledExactlyOnceWith(output))
     }
   )
-  it('keeps a raw start error out of the failure headline', async () => {
-    call.mockImplementation(async (_target, params) => {
-      if (params.operation === 'start') {
-        throw new Error('private transport stack and host runtime details')
+  it.each(['start', 'read'])(
+    'keeps Install available after a failed %s without exposing the transport error',
+    async (failedOperation) => {
+      call.mockImplementation(async (_target, params) => {
+        if (params.operation === failedOperation) {
+          throw new Error('private transport stack and host runtime details')
+        }
+        return {
+          ...state(false, null),
+          job:
+            params.operation === 'start'
+              ? { id: 'running', phase: 'running', output: 'started', exitCode: null, error: null }
+              : null
+        }
+      })
+      render(<CodexMaintenanceRow target={TARGET} />)
+      await flush()
+      fireEvent.click(screen.getByRole('button', { name: 'Install Codex' }))
+      expect(
+        await screen.findByText('Codex could not be installed. Try again.', {}, { timeout: 3_000 })
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/private transport stack/)).toBeNull()
+      if (failedOperation === 'read') {
+        await waitFor(
+          () =>
+            expect(
+              call.mock.calls.filter(([, params]) => params.operation === 'read')
+            ).toHaveLength(3),
+          { timeout: 4_000 }
+        )
       }
-      return state(false, null)
-    })
-    render(<SettingsRow />)
-    await flush()
-    fireEvent.click(screen.getByRole('button', { name: 'Install Codex' }))
-    expect(await screen.findByText('Codex could not be installed. Try again.')).toBeInTheDocument()
-    expect(screen.queryByText(/private transport stack/)).toBeNull()
-  })
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      const retry = screen.getByRole('button', { name: 'Install Codex' })
+      expect(retry).toBeEnabled()
+      fireEvent.click(retry)
+      await waitFor(() =>
+        expect(call.mock.calls.filter(([, params]) => params.operation === 'start')).toHaveLength(2)
+      )
+    }
+  )
   it('states a too-old Codex through the ordinary start-failure notice with manual Retry', () => {
     const notices = structuredSessionNotices({
       agentLabel: 'Codex',

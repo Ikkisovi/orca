@@ -10,8 +10,7 @@ import { createCodexStructuredLaunchResolver } from '../codex/codex-structured-l
 import { configuredCodexInvocationSources } from '../codex/configured-codex-invocation'
 import { createStructuredAgentEnvironmentResolvers } from '../runtime/structured-agent-shell-environment'
 import { identityFor } from '../codex/codex-structured-session-adapter-fixture'
-import { invalidateCodexCliInstallation, readCodexCliInstallation } from './codex-cli-installation'
-import { resolveCodexMaintenanceCommand } from './codex-maintenance-command'
+import { readCodexCliInstallation } from './codex-cli-installation'
 import type * as CommandResolution from '../../shared/node-cli-command-resolution'
 
 vi.mock('../startup/login-shell-environment', () => ({
@@ -28,7 +27,6 @@ vi.mock('../../shared/node-cli-command-resolution', async (original) => {
 
 let root: string | undefined
 afterEach(async () => {
-  invalidateCodexCliInstallation()
   if (root) {
     await rm(root, { recursive: true, force: true })
   }
@@ -85,18 +83,11 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
         expect(actual.code).toBe(0)
         expect(actual.stdout.trim()).toBe('codex-cli 0.136.0')
         await writeFile(versionFile, '0.135.0')
-        invalidateCodexCliInstallation()
         await expect(resolve({ identity: identityFor(record.sessionId) })).rejects.toThrow(
           '0.135.0'
         )
-        const context = { cwd, commandSettings: settings }
-        const maintenance = await resolveCodexMaintenanceCommand(context)
-        expect(maintenance.installation.status).toBe('unsupported')
-        expect(maintenance.spec).toBeNull()
-        // The user updates Codex outside Orca; the next check after the cache lapses sees it.
+        // An external update is checked again on the next chat start.
         await writeFile(versionFile, '0.136.0')
-        invalidateCodexCliInstallation()
-        expect((await resolveCodexMaintenanceCommand(context)).installation.status).toBe('ready')
         await expect(resolve({ identity: identityFor(record.sessionId) })).resolves.toMatchObject({
           cwd
         })
@@ -104,7 +95,7 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
     }
   )
 
-  it('resolves a relative command path before probing and fingerprinting it', async () => {
+  it('resolves a relative command path before probing it', async () => {
     root = await mkdtemp(join(tmpdir(), 'codex-relative-command-'))
     await mkdir(join(root, 'bin'))
     const file = join(root, 'bin', 'codex')

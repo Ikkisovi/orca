@@ -190,7 +190,6 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'pairing.getEndpoints',
   'pairing.provisionRelay',
   'preflight.check',
-  'preflight.codexMaintenance',
   'preflight.detectAgents',
   'preflight.detectRemoteAgents',
   'projectGroup.list',

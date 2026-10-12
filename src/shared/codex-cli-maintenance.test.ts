@@ -45,7 +45,7 @@ describe('Codex maintenance mixed-version replies', () => {
     expect(result.job?.phase).toBe('unknown')
     expect(result.job?.output).toBe('host log')
   })
-  it('accepts optional current-job and expiry evidence while preserving legacy replies', () => {
+  it('accepts optional current-job activity while preserving legacy replies', () => {
     const legacy = {
       installation: codexCliInstallation(false, null),
       canRun: true,
@@ -54,8 +54,7 @@ describe('Codex maintenance mixed-version replies', () => {
     expect(CodexMaintenanceStateSchema.parse(legacy)).toEqual(legacy)
     const current = {
       ...legacy,
-      currentJob: null,
-      evidence: { expiresAt: 30_000, configurationId: 'opaque' }
+      currentJob: null
     }
     expect(CodexMaintenanceStateSchema.parse(current)).toEqual(current)
   })

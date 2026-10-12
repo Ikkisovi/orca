@@ -22,18 +22,19 @@ function fixture(exitCode = 0, releasePath?: string) {
       ...(releasePath ? [releasePath] : [])
     ]
   }
-  const evidence = { expiresAt: Date.now() + 30_000, configurationId: 'configuration' }
-  const resolve = vi.fn().mockResolvedValue({ installation, evidence, spec })
-  const spawn = vi.fn<PipedProcessSpawner>(spawnProcess)
-  const invalidate = vi.fn(() => {
-    resolve.mockResolvedValue({
-      installation: exitCode ? installation : ready,
-      evidence,
-      spec: exitCode ? spec : null
+  const resolve = vi.fn().mockResolvedValue({ installation, spec })
+  const spawn = vi.fn<PipedProcessSpawner>((input) => {
+    const child = spawnProcess(input)
+    child.once('close', () => {
+      resolve.mockResolvedValue({
+        installation: exitCode ? installation : ready,
+        spec: exitCode ? spec : null
+      })
     })
+    return child
   })
-  const runner = new CodexMaintenanceRunner({ resolve, spawn, invalidate })
-  return { runner, resolve, spawn, invalidate }
+  const runner = new CodexMaintenanceRunner({ resolve, spawn })
+  return { runner, resolve, spawn }
 }
 
 async function finished(runner: CodexMaintenanceRunner, id: string) {
@@ -59,7 +60,7 @@ describe('host-owned Codex maintenance runner', () => {
     await finished(f.runner, first.job.id)
   })
 
-  it('streams stdout and stderr while running, then invalidates and checks installation on exit', async () => {
+  it('streams stdout and stderr while running, then checks installation on the next status read', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'codex-maintenance-stream-'))
     const releasePath = join(directory, 'release')
     const f = fixture(0, releasePath)
@@ -87,10 +88,6 @@ describe('host-owned Codex maintenance runner', () => {
     expect(result.job?.exitCode).toBe(0)
     expect(result.installation.status).toBe('ready')
     expect(result.canRun).toBe(false)
-    expect(f.invalidate).toHaveBeenCalledTimes(1)
-    expect(f.resolve.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
-      f.invalidate.mock.invocationCallOrder[0]
-    )
   }, 25_000)
 
   it('keeps the failure exit code and log, rechecks, and permits an explicit retry', async () => {
@@ -122,7 +119,6 @@ describe('host-owned Codex maintenance runner', () => {
     }
     const result = await finished(f.runner, state.job.id)
     expect(result.job?.error).toBe('permission denied')
-    expect(f.invalidate).toHaveBeenCalledTimes(1)
   })
 
   it('does not run anything from a status read or for a supported installation', async () => {
@@ -193,7 +189,7 @@ describe('host-owned Codex maintenance runner', () => {
     }
   )
 
-  it('separates a historical log read from the latest job and forwards the host evidence unchanged', async () => {
+  it('separates a historical log read from the latest job', async () => {
     const f = fixture(1)
     const first = await f.runner.start()
     if (!first.job) {
@@ -208,6 +204,5 @@ describe('host-owned Codex maintenance runner', () => {
     const historical = await f.runner.status(first.job.id)
     expect(historical.job?.id).toBe(first.job.id)
     expect(historical.currentJob?.id).toBe(second.job.id)
-    expect(historical.evidence).toEqual(first.evidence)
   })
 })

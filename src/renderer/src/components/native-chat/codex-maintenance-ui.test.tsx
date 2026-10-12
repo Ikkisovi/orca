@@ -9,7 +9,6 @@ import {
   resetCodexMaintenanceStoreForTests
 } from '@/lib/codex-maintenance-store'
 import { CodexMaintenanceRow } from '../settings/CodexMaintenanceRow'
-import { CodexMaintenanceLogDialog } from './CodexMaintenanceLogDialog'
 
 const { call, refreshAgents } = vi.hoisted(() => ({
   call: vi.fn(),
@@ -17,8 +16,7 @@ const { call, refreshAgents } = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/codex-maintenance-client', () => ({
   callCodexMaintenance: call,
-  codexMaintenanceTargetKey: (target: { kind: string; cwd?: string }) =>
-    `${target.kind}:codex${target.cwd ? `:${target.cwd}` : ''}`
+  codexMaintenanceTargetKey: (target: { kind: string }) => `${target.kind}:codex`
 }))
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -30,7 +28,6 @@ const TARGET = { kind: 'local' } as const
 const TOO_OLD = 'Codex 0.135.0 is too old for chats. Update to 0.136.0 or newer.'
 function state(installed: boolean, version: string | null): CodexMaintenanceState {
   return {
-    evidence: { expiresAt: Date.now() + 30_000, configurationId: 'config' },
     installation: codexCliInstallation(installed, version),
     canRun: !installed,
     job: null
@@ -54,7 +51,7 @@ async function flush() {
 
 describe('Codex Settings maintenance', () => {
   it.each([
-    { installed: false, version: null, text: "Codex isn't installed.", install: true },
+    { installed: false, version: null, text: 'Not installed', install: true },
     { installed: true, version: '0.135.0', text: TOO_OLD, install: false },
     { installed: true, version: null, text: null, install: false },
     { installed: true, version: '0.136.0', text: null, install: false }
@@ -97,12 +94,7 @@ describe('Codex Settings maintenance', () => {
     call.mockImplementation(async (_target, params) =>
       params.operation === 'status' ? initial : params.operation === 'start' ? running : failed
     )
-    render(
-      <>
-        <CodexMaintenanceLogDialog />
-        <CodexMaintenanceRow target={TARGET} />
-      </>
-    )
+    render(<CodexMaintenanceRow target={TARGET} />)
     await flush()
     fireEvent.click(screen.getByRole('button', { name: 'Install Codex' }))
     await waitFor(() =>
@@ -142,19 +134,14 @@ describe('Codex Settings maintenance', () => {
           ? running
           : complete
     )
-    render(
-      <>
-        <CodexMaintenanceLogDialog />
-        <CodexMaintenanceRow target={TARGET} />
-      </>
-    )
+    render(<CodexMaintenanceRow target={TARGET} />)
     await flush()
     fireEvent.click(screen.getByRole('button', { name: 'Install Codex' }))
     await waitFor(
       () => expect(screen.getByText('Command exited with code 0')).toBeInTheDocument(),
       { timeout: 3000 }
     )
-    expect(screen.queryByText("Codex isn't installed.")).toBeNull()
+    expect(screen.queryByText('Not installed')).toBeNull()
     expect(refreshAgents).toHaveBeenCalled()
   })
 })

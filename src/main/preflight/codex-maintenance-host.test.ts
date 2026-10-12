@@ -18,13 +18,13 @@ describe('Codex maintenance on the execution host', () => {
     start.mockResolvedValue(STATE)
     status.mockResolvedValue(STATE)
     const settings = { agentCmdOverrides: { codex: '/host/codex' } }
-    await codexMaintenanceOnHost({ operation: 'status', cwd: '/workspace' }, settings)
+    await codexMaintenanceOnHost({ operation: 'status' }, settings)
     await codexMaintenanceOnHost({ operation: 'read', jobId: 'job' }, settings)
     await codexMaintenanceOnHost({ operation: 'start' }, settings)
     expect(status.mock.calls).toEqual([
-      [undefined, { cwd: '/workspace', commandSettings: settings }],
-      ['job', { cwd: undefined, commandSettings: settings }]
+      [undefined, { commandSettings: settings }],
+      ['job', { commandSettings: settings }]
     ])
-    expect(start).toHaveBeenCalledExactlyOnceWith({ cwd: undefined, commandSettings: settings })
+    expect(start).toHaveBeenCalledExactlyOnceWith({ commandSettings: settings })
   })
 })

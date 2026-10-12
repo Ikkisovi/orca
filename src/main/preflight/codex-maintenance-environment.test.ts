@@ -58,7 +58,6 @@ it.skipIf(process.platform === 'win32')(
     })
     const launch = await resolve({ identity: identityFor(value.sessionId) })
     const maintenance = await resolveCodexMaintenanceCommand({
-      cwd: root,
       commandSettings: {
         agentCmdOverrides: { codex: command },
         agentDefaultEnv: { codex: environment }

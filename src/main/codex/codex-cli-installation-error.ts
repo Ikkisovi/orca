@@ -9,8 +9,12 @@ export class CodexCliInstallationError extends AgentSessionPreSpawnError {
   constructor(problem: CodexInstallationProblem) {
     super(
       sayAgentSessionFailureEnglish(
-        problem.installedVersion === null ? 'codexCliMissing' : 'codexCliTooOld',
-        { installedVersion: problem.installedVersion ?? '', minimumVersion: problem.minimumVersion }
+        problem.installedVersion === null ? 'cliMissing' : 'codexCliTooOld',
+        {
+          agent: 'Codex',
+          installedVersion: problem.installedVersion ?? '',
+          minimumVersion: problem.minimumVersion
+        }
       )
     )
     this.codexInstallation = problem
@@ -35,7 +39,7 @@ export async function requireSupportedCodexCli(
   readInstallation: typeof readCodexCliInstallation = readCodexCliInstallation
 ): Promise<void> {
   const result = await readInstallation(input)
-  if (result.status === 'missing' || result.status === 'unsupported') {
+  if (result.status === 'unsupported') {
     throw new CodexCliInstallationError({
       installedVersion: result.version,
       minimumVersion: result.minimumVersion

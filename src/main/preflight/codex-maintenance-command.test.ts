@@ -12,11 +12,7 @@ vi.mock('../codex/codex-structured-launch-resolution', () => ({
   resolveCodexStructuredInvocation: invocation
 }))
 vi.mock('./codex-cli-installation', () => ({
-  readCodexCliInstallationEvidence: async (input: unknown) => ({
-    installation: await installation(input),
-    expiresAt: Date.now() + 30_000,
-    configurationId: 'config'
-  })
+  readCodexCliInstallation: installation
 }))
 vi.mock('../../shared/node-cli-command-resolution', () => ({
   resolveCliCommand: resolve,
@@ -34,13 +30,13 @@ afterEach(() => {
 })
 
 describe('Codex install command', () => {
-  it('installs a missing Codex with the npm found on the chat PATH, without a shell', async () => {
-    const result = await resolveCodexMaintenanceCommand({ cwd: root })
+  it('installs a missing Codex with the npm found on the host PATH, without a shell', async () => {
+    const result = await resolveCodexMaintenanceCommand()
     expect(resolve).toHaveBeenCalledWith('npm', { pathEnv: root })
     expect(result.spec).toEqual({
       program: join(root, 'npm'),
       args: ['install', '-g', '@openai/codex'],
-      cwd: root,
+      cwd: process.cwd(),
       env: { PATH: root }
     })
   })

@@ -9,7 +9,6 @@ import {
   type CodexMaintenanceJob,
   type CodexMaintenanceState
 } from '../../shared/codex-cli-maintenance'
-import { invalidateCodexCliInstallation } from './codex-cli-installation'
 import {
   resolveCodexMaintenanceCommand,
   type CodexMaintenanceContext
@@ -26,8 +25,7 @@ export class CodexMaintenanceRunner {
   constructor(
     private readonly deps = {
       resolve: (context: CodexMaintenanceContext) => resolveCodexMaintenanceCommand(context),
-      spawn: (spec: PipedProcessSpec) => spawnProcess(spec),
-      invalidate: () => invalidateCodexCliInstallation()
+      spawn: (spec: PipedProcessSpec) => spawnProcess(spec)
     }
   ) {}
 
@@ -45,7 +43,6 @@ export class CodexMaintenanceRunner {
     const job = jobId ? (this.jobs.get(jobId)?.job ?? null) : latest
     return {
       installation: current.installation,
-      evidence: current.evidence,
       currentJob: latest ? { id: latest.id, phase: latest.phase } : null,
       canRun: Boolean(current.spec) && !this.unsettledProcess?.(),
       job
@@ -82,21 +79,16 @@ export class CodexMaintenanceRunner {
       error: null
     }
     this.jobs.set(job.id, { job, finishedAt: null })
-    void this.execute(job, resolved.spec, context)
+    void this.execute(job, resolved.spec)
     return {
       installation: resolved.installation,
-      evidence: resolved.evidence,
       currentJob: { id: job.id, phase: job.phase },
       canRun: true,
       job: { ...job }
     }
   }
 
-  private async execute(
-    job: CodexMaintenanceJob,
-    spec: ProcessSpec,
-    context: CodexMaintenanceContext
-  ): Promise<void> {
+  private async execute(job: CodexMaintenanceJob, spec: ProcessSpec): Promise<void> {
     const append = (chunk: Buffer | string): void => {
       job.output = clampUtf8TextTail(job.output + chunk.toString(), 128 * 1024).text
     }
@@ -119,14 +111,6 @@ export class CodexMaintenanceRunner {
         append(`\n${codexMaintenanceDiagnostic(job.error)}\n`)
       }
       this.revision += 1
-      this.deps.invalidate()
-      try {
-        await this.deps.resolve(context)
-      } catch (error) {
-        append(
-          `\n${codexMaintenanceDiagnostic(error instanceof Error ? error.message : String(error))}\n`
-        )
-      }
       job.phase = 'completed'
       const entry = this.jobs.get(job.id)
       if (entry) {

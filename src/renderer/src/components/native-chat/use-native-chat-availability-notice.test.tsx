@@ -95,8 +95,7 @@ it.each(['launch', 'history', 'send'] as const)(
       kind: 'refused',
       code: 'agent_session_operation_invalid',
       details: {
-        reason: 'attachFailed',
-        codexInstallation: { installedVersion: null, minimumVersion: '0.136.0' }
+        reason: 'cliMissing'
       }
     } as const
     const row: AgentJournalRenderItem = {
@@ -108,12 +107,12 @@ it.each(['launch', 'history', 'send'] as const)(
         kind: 'status',
         tone: 'error',
         ...agentSessionFailureWords(
-          { kind: 'startFailed', refusal },
+          { kind: 'cliMissing', refusal },
           { agentName: 'Codex', surface: 'row' }
         )
       }
     }
-    const rejection: AgentSessionFailureFact = { kind: 'startFailed', refusal }
+    const rejection: AgentSessionFailureFact = { kind: 'cliMissing', refusal }
     const sentKey = agentJournalSubmissionKey('sent')
     const sentRow: AgentJournalRenderItem = {
       itemId: sentKey,

@@ -97,7 +97,7 @@ it.each(['returned', 'held'] as const)(
   }
 )
 
-it('offers Resume only for an actual pause and releases it through the host', async () => {
+it('keeps an actual pause after a version refusal and releases it through the host', async () => {
   const id = await retainedDraft()
   rig.starts.mockReset()
   expect(await rig.queuePause()).not.toBeNull()

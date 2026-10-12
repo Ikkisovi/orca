@@ -42,8 +42,8 @@ describe('Codex maintenance renderer execution host', () => {
   it('keeps local maintenance on its explicit preload path', async () => {
     const maintenance = vi.fn().mockResolvedValue(ready())
     Object.assign(window, { api: { preflight: { codexMaintenance: maintenance } } })
-    await callCodexMaintenance({ kind: 'local', cwd: '/project' }, { operation: 'start' })
-    expect(maintenance.mock.calls).toEqual([[{ operation: 'start', cwd: '/project' }]])
+    await callCodexMaintenance({ kind: 'local' }, { operation: 'start' })
+    expect(maintenance.mock.calls).toEqual([[{ operation: 'start' }]])
     expect(call).not.toHaveBeenCalled()
   })
 })

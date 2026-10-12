@@ -44,7 +44,7 @@ export type CodexStructuredLaunchResolverDeps = {
 
 export type CodexStructuredInvocation = {
   command: string
-  environment: NodeJS.ProcessEnv
+  environment: Record<string, string>
 }
 
 /**
@@ -117,15 +117,7 @@ export function createCodexStructuredLaunchResolver(
       args: [...args, 'app-server'],
       cwd,
       codexHome: accountHome.path,
-      ...(environment
-        ? {
-            env: Object.fromEntries(
-              Object.entries(environment).filter(
-                (pair): pair is [string, string] => pair[1] !== undefined
-              )
-            )
-          }
-        : {}),
+      env: environment,
       // An empty chain is a session that has never proved a thread, so it
       // starts one; anything else resumes the last link this session proved.
       resumeThreadId,
