@@ -79,6 +79,8 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
 
   var selectedAttribute = ${JSON.stringify(BROWSER_GRAB_SELECTED_ATTRIBUTE)};
   var selectedEl = null;
+  var selectedValue = null;
+  var previousSelectedValue = null;
   var frozenFrame = 0;
   var frozenResizeObserver = null;
 
@@ -103,10 +105,15 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     frozenResizeObserver = null;
     if (frozenFrame) cancelAnimationFrame(frozenFrame);
     frozenFrame = 0;
-    if (selectedEl) {
-      try { selectedEl.removeAttribute(selectedAttribute); } catch(e) {}
+    if (selectedEl && selectedEl.getAttribute(selectedAttribute) === selectedValue) {
+      try {
+        if (previousSelectedValue === null) selectedEl.removeAttribute(selectedAttribute);
+        else selectedEl.setAttribute(selectedAttribute, previousSelectedValue);
+      } catch(e) {}
     }
     selectedEl = null;
+    selectedValue = null;
+    previousSelectedValue = null;
   }
 
   // Store state for awaitClick/finalize/teardown access
@@ -118,7 +125,7 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     // the renderer shows the copy menu. Disabling pointer-events on the host
     // lets the cursor return to normal and prevents the crosshair from showing
     // over the dropdown menu's area in the webview.
-    freezeHighlight: function() {
+    freezeHighlight: function(selectionId) {
       host.removeEventListener('mousemove', onPointerMove);
       host.style.pointerEvents = 'none';
       host.style.cursor = 'default';
@@ -128,7 +135,9 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
       if (!selectedEl) return;
       // Why: the isolated-world viewport bridge finds the selection by this marker; it
       // cannot see this world's objects, and the page must not see the bridge's token.
-      selectedEl.setAttribute(selectedAttribute, '');
+      previousSelectedValue = selectedEl.getAttribute(selectedAttribute);
+      selectedValue = selectionId;
+      selectedEl.setAttribute(selectedAttribute, selectionId);
       highlightBox.style.transition = 'none';
       window.addEventListener('scroll', scheduleFrozenHighlight, true);
       window.addEventListener('resize', scheduleFrozenHighlight, true);

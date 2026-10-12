@@ -57,13 +57,14 @@ async function createGuest() {
       }
     }
   }
-  const install = (emitViewport: boolean): void => {
+  const install = (emitViewport: boolean, selectionId = 'selection-1'): void => {
     runInNewContext(
       buildBrowserAnnotationViewportBridgeScript({
         emitViewport,
         enabled: true,
         token: TOKEN,
-        markers: []
+        markers: [],
+        selectionId
       }),
       context
     )
@@ -90,7 +91,7 @@ async function createGuest() {
 describe('annotation viewport bridge live target', () => {
   it('reports the selected element measured live, including scroll inside a box', async () => {
     const guest = await createGuest()
-    guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, '')
+    guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'selection-1')
     guest.install(true)
     guest.flushFrames()
     expect(guest.lastReport()).toEqual({
@@ -107,9 +108,52 @@ describe('annotation viewport bridge live target', () => {
     expect(guest.lastReport()?.target).toEqual({ x: 40, y: 120, width: 120, height: 30 })
   })
 
+  it('ignores an earlier page-owned selection marker', async () => {
+    const guest = await createGuest()
+    const decoy = guest.window.document.createElement('div')
+    decoy.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'page-owned')
+    decoy.getBoundingClientRect = () => new guest.window.DOMRect(600, 400, 40, 20)
+    guest.window.document.body.insertBefore(decoy, guest.scroller)
+    guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'selection-1')
+
+    guest.install(true)
+    guest.flushFrames()
+
+    expect(guest.lastReport()?.target).toEqual({ x: 40, y: 300, width: 120, height: 30 })
+  })
+
+  it('switches to a new selection when the bridge is reused', async () => {
+    const guest = await createGuest()
+    guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'selection-1')
+    guest.install(true)
+    guest.flushFrames()
+
+    const next = guest.window.document.createElement('button')
+    next.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'selection-2')
+    next.getBoundingClientRect = () => new guest.window.DOMRect(200, 100, 80, 20)
+    guest.window.document.body.appendChild(next)
+    guest.install(true, 'selection-2')
+    guest.flushFrames()
+
+    expect(guest.lastReport()?.target).toEqual({ x: 200, y: 100, width: 80, height: 20 })
+  })
+
+  it('does not report a target when two elements copy the same selection value', async () => {
+    const guest = await createGuest()
+    guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'selection-1')
+    const decoy = guest.window.document.createElement('div')
+    decoy.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'selection-1')
+    guest.window.document.body.insertBefore(decoy, guest.scroller)
+
+    guest.install(true)
+    guest.flushFrames()
+
+    expect(guest.lastReport()?.target).toBeUndefined()
+  })
+
   it('re-reports on resize and when the element changes size', async () => {
     const guest = await createGuest()
-    guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, '')
+    guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'selection-1')
     guest.install(true)
     guest.flushFrames()
 
@@ -128,7 +172,7 @@ describe('annotation viewport bridge live target', () => {
 
   it('reports no target once the grab overlay has released the element', async () => {
     const guest = await createGuest()
-    guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, '')
+    guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'selection-1')
     guest.install(true)
     guest.flushFrames()
 

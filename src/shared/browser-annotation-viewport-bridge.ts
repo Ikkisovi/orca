@@ -14,6 +14,7 @@ export type BrowserSetAnnotationViewportBridgeArgs = {
   enabled: boolean
   emitViewport: boolean
   markers: BrowserAnnotationViewportBridgeMarker[]
+  selectionId?: string
   token: string
 }
 
@@ -21,6 +22,7 @@ export type BrowserAnnotationViewportBridgeOptions = {
   enabled: boolean
   emitViewport: boolean
   markers: BrowserAnnotationViewportBridgeMarker[]
+  selectionId?: string
   token: string
 }
 
@@ -65,6 +67,7 @@ export function buildBrowserAnnotationViewportBridgeScript({
   emitViewport,
   enabled,
   markers,
+  selectionId,
   token
 }: BrowserAnnotationViewportBridgeOptions): string {
   return `(() => {
@@ -73,6 +76,7 @@ export function buildBrowserAnnotationViewportBridgeScript({
   const enabled = ${JSON.stringify(enabled)};
   const emitViewportMessages = ${JSON.stringify(emitViewport)};
   const markers = ${JSON.stringify(markers)};
+  const selectionId = ${JSON.stringify(selectionId ?? null)};
   const token = ${JSON.stringify(token)};
   const prefix = ${JSON.stringify(BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX)};
   const stateKey = '__orcaBrowserAnnotationViewportBridge';
@@ -124,11 +128,17 @@ export function buildBrowserAnnotationViewportBridgeScript({
   // marks it in the shared DOM because this world cannot see the page's objects.
   const trackTarget = (state) => {
     const current = state.target;
-    const next = !emitViewportMessages
-      ? null
-      : current && current.isConnected && current.hasAttribute(selectedAttribute)
-        ? current
-        : document.querySelector('[' + selectedAttribute + ']');
+    let next = null;
+    if (emitViewportMessages && selectionId) {
+      for (const candidate of document.querySelectorAll('[' + selectedAttribute + ']')) {
+        if (candidate.getAttribute(selectedAttribute) !== selectionId) continue;
+        if (next) {
+          next = null;
+          break;
+        }
+        next = candidate;
+      }
+    }
     if (next !== current) {
       state.target = next;
       if (state.targetObserver) {

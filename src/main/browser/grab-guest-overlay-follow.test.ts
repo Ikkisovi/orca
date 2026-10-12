@@ -11,7 +11,7 @@ afterEach(async () => {
   await Promise.all(guestAborts.splice(0).map((abort) => abort()))
 })
 
-async function armGuest() {
+async function armGuest(previousMarker?: string) {
   const { Window } = await import('happy-dom')
   const window = new Window()
   guestAborts.push(() => window.happyDOM.abort())
@@ -28,6 +28,9 @@ async function armGuest() {
 
   const scroller = document.createElement('div')
   const target = document.createElement('button')
+  if (previousMarker !== undefined) {
+    target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, previousMarker)
+  }
   scroller.appendChild(target)
   document.body.appendChild(scroller)
   let targetRect: Rect = { x: 40, y: 300, width: 120, height: 30 }
@@ -53,7 +56,7 @@ async function armGuest() {
   expect(runInNewContext(buildGuestOverlayScript('arm'), context)).toBe(true)
   const grab: {
     host: { dispatchEvent: (event: unknown) => void }
-    freezeHighlight: () => void
+    freezeHighlight: (selectionId: string) => void
     cleanup: () => void
   } = Object.getOwnPropertyDescriptor(window, '__orcaGrab')?.value
   const flushFrames = (): void => {
@@ -79,7 +82,7 @@ async function armGuest() {
   // Hover the target, then click-freeze it like awaitClick does.
   grab.host.dispatchEvent(new window.MouseEvent('mousemove', { clientX: 50, clientY: 310 }))
   flushFrames()
-  grab.freezeHighlight()
+  grab.freezeHighlight('selection-1')
 
   return {
     window,
@@ -125,7 +128,7 @@ describe('grab overlay after the click', () => {
 
   it('marks the selected element for the viewport bridge and clears it on teardown', async () => {
     const guest = await armGuest()
-    expect(guest.target.hasAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe(true)
+    expect(guest.target.getAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe('selection-1')
 
     guest.grab.cleanup()
     expect(guest.target.hasAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe(false)
@@ -133,5 +136,22 @@ describe('grab overlay after the click', () => {
     guest.moveTarget({ x: 0, y: 0, width: 1, height: 1 })
     guest.scroller.dispatchEvent(new guest.window.Event('scroll'))
     expect(guest.flushFrames).not.toThrow()
+  })
+
+  it('restores a page-owned marker value on teardown', async () => {
+    const guest = await armGuest('page-owned')
+    expect(guest.target.getAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe('selection-1')
+
+    guest.grab.cleanup()
+    expect(guest.target.getAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe('page-owned')
+  })
+
+  it('does not overwrite a page marker changed after the selection', async () => {
+    const guest = await armGuest('page-owned')
+    guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'page-updated')
+
+    guest.grab.cleanup()
+
+    expect(guest.target.getAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe('page-updated')
   })
 })
