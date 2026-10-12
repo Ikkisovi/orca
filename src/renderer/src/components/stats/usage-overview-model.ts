@@ -77,18 +77,7 @@ export function buildUsageOverview(input: UsageOverviewInput): UsageOverviewMode
   }
 }
 
-export function formatUsageTokens(value: number): string {
-  if (value >= 1_000_000_000) {
-    return `${(value / 1_000_000_000).toFixed(1)}B`
-  }
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}k`
-  }
-  return value.toLocaleString()
-}
+export { formatTokens as formatUsageTokens } from './usage-formatters'
 
 export function formatUsageCost(value: number | null): string {
   if (value === null) {

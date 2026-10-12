@@ -1,11 +1,10 @@
+const compactTokens = new Intl.NumberFormat('en', {
+  notation: 'compact',
+  maximumFractionDigits: 1
+})
+
 export function formatTokens(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}k`
-  }
-  return value.toLocaleString()
+  return Math.abs(value) >= 1_000 ? compactTokens.format(value) : value.toLocaleString()
 }
 
 export function formatCost(value: number | null): string {

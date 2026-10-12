@@ -1,16 +1,7 @@
+import { formatTokens } from './usage-formatters'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import type { CodexUsageDailyPoint } from '../../../../shared/codex-usage-types'
 import { translate } from '@/i18n/i18n'
-
-function formatTokens(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}k`
-  }
-  return value.toLocaleString()
-}
 
 function getMaxDailyTotal(daily: CodexUsageDailyPoint[]): number {
   let max = 1

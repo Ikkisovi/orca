@@ -2,13 +2,20 @@
 import { act, createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { HostUsagePane } from './HostUsagePane'
 import { useHostUsage } from './use-host-usage'
 import { usePluginPanelsStore } from '../../store/plugin-panels'
 import type { PluginHostListEntry } from '../../../../preload/api-types'
 import { HOST_USAGE_PLUGIN_KEY } from '../../../../shared/host-usage-summary'
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string, values: Record<string, unknown> = {}) =>
+    Object.entries(values).reduce(
+      (text, [key, value]) => text.replaceAll(`{{${key}}}`, String(value)),
+      fallback
+    )
+}))
 const totals = {
   total: 120,
   input: 60,
@@ -94,6 +101,49 @@ afterEach(() => {
 })
 
 describe('native host usage', () => {
+  it('renders every selected day and updates the chart when the host or range changes', async () => {
+    const user = userEvent.setup()
+    invokeCommand.mockImplementation(({ args }) => {
+      const total = args.host === 'local' ? 2_000_000_000_000 : 1_000_000_000
+      return Promise.resolve({
+        ...snapshot,
+        summary: { ...totals, total },
+        daily: Array.from({ length: args.days }, (_, index) => ({
+          ...totals,
+          key: new Date(Date.UTC(2026, 9, index + 1)).toISOString().slice(0, 10),
+          total
+        }))
+      })
+    })
+    render(createElement(HostUsagePane))
+    const chart = await screen.findByRole('img', { name: 'Daily usage' })
+    expect(chart.querySelectorAll('rect')).toHaveLength(30)
+    expect(chart.textContent).toContain('1B')
+    await user.click(screen.getByRole('button', { name: 'All hosts' }))
+    await user.click(screen.getByRole('menuitemradio', { name: 'Mac' }))
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'Daily usage' }).textContent).toContain('2T')
+    )
+    await user.click(screen.getByRole('button', { name: 'Last 30 days' }))
+    await user.click(screen.getByRole('menuitemradio', { name: 'Last 7 days' }))
+    await waitFor(() =>
+      expect(
+        screen.getByRole('img', { name: 'Daily usage' }).querySelectorAll('rect')
+      ).toHaveLength(7)
+    )
+    expect(invokeCommand).toHaveBeenLastCalledWith({
+      pluginKey: HOST_USAGE_PLUGIN_KEY,
+      commandId: 'usage-summary',
+      args: { host: 'local', days: 7 }
+    })
+  })
+
+  it('shows an explicit empty state when the selected range has no daily data', async () => {
+    render(createElement(HostUsagePane))
+    await screen.findByText('No collected usage in this date range.')
+    expect(screen.queryByRole('img', { name: 'Daily usage' })).toBeNull()
+  })
+
   it('shows both machines inside the native pane and keeps reload separate from scan', async () => {
     render(createElement(HostUsagePane))
     await screen.findByRole('heading', { name: 'Venus' })

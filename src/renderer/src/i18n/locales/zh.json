@@ -4359,7 +4359,12 @@
           "autoOff": "自动扫描已关闭",
           "scan": "扫描所选主机",
           "reload": "重新加载已采集统计",
-          "details": "每日图表、项目与会话"
+          "details": "项目与会话"
+        },
+        "HostUsageDailyChart": {
+          "title": "每日用量",
+          "description": "所选主机及日期范围的每日 token 总量 · UTC",
+          "empty": "所选日期范围暂无已采集用量。"
         }
       },
       "sparse": {

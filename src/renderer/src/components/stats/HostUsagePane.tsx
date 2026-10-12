@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { StatCard } from './StatCard'
+import { HostUsageDailyChart } from './HostUsageDailyChart'
 import { formatTokens, formatCost, formatUpdatedAt } from './usage-formatters'
 import { useHostUsage } from './use-host-usage'
 import { translate } from '@/i18n/i18n'
@@ -162,6 +163,7 @@ export function HostUsagePane(): React.JSX.Element {
                 )}
               </p>
             )}
+            <HostUsageDailyChart daily={snapshot.daily} />
             <div className="grid gap-3 xl:grid-cols-2">
               {hosts.map((entry) => (
                 <section
@@ -258,10 +260,7 @@ export function HostUsagePane(): React.JSX.Element {
             onClick={() => void open()}
             disabled={!enabled || !compatible || busy}
           >
-            {translate(
-              'auto.components.stats.HostUsagePane.details',
-              'Daily charts, projects & sessions'
-            )}
+            {translate('auto.components.stats.HostUsagePane.details', 'Projects & sessions')}
           </Button>
         </div>
       </section>
