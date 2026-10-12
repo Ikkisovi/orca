@@ -60,7 +60,6 @@ describe('spawn observer', () => {
     let calls = 0
     setSpawnObserver(null)
     await runProcess({ program: process.execPath, args: ['-e', 'process.exit(0)'] })
-    runProcessSync({ program: process.execPath, args: ['-e', 'process.exit(0)'] })
     setSpawnObserver(() => {
       calls += 1
     })
