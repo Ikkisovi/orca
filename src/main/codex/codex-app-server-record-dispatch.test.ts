@@ -36,24 +36,39 @@ function pendingCall(
 }
 
 describe('createCodexAppServerRecordDispatcher oversized records', () => {
-  it('skips an oversized notification with a sentence the chat row can show', () => {
+  it('skips an oversized data-only notification with a sentence the chat row can show', () => {
     const { records, frames, onProtocolFailure } = dispatcher()
 
-    records.rejectOversized(
-      oversized('{"method":"item/completed","params":{"item":{"aggregatedOutput":"xxxx')
-    )
+    records.rejectOversized(oversized('{"method":"turn/plan/updated","params":{"plan":"xxxx'))
 
     expect(frames).toEqual([
       {
         kind: 'frame:oversized-notification',
         payload: expect.objectContaining({
           message: 'Codex sent an update over 64 MB, so Orca skipped it.',
-          method: 'item/completed'
+          method: 'turn/plan/updated'
         })
       }
     ])
     expect(onProtocolFailure).not.toHaveBeenCalled()
   })
+
+  it.each(['turn/completed', 'item/completed'])(
+    'fails the connection on an oversized %s',
+    (method) => {
+      const { records, frames, onProtocolFailure } = dispatcher()
+
+      records.rejectOversized(oversized(`{"method":"${method}","params":{"text":"xxxx`))
+
+      expect(onProtocolFailure).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message:
+            'Codex sent a completion update over 64 MB, so Orca could not read its outcome. Check any file changes before retrying.'
+        })
+      )
+      expect(frames).toEqual([])
+    }
+  )
 
   it('fails only the call an oversized reply belonged to, without a chat row', () => {
     const { records, frames, onProtocolFailure } = dispatcher()

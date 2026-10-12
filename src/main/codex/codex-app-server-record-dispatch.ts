@@ -9,6 +9,7 @@ import {
 } from './codex-app-server-session'
 import { classifyJsonRpcPrefix } from '../../shared/json-rpc-record-prefix'
 import { classifyProviderFrame } from '../native-chat/agent-session-wire/provider-frame-disposition'
+import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 
 const OVERSIZED_REQUEST_ERROR_CODE = -32001
 const MAX_REMEMBERED_TIMEOUTS = 64
@@ -163,6 +164,17 @@ export function createCodexAppServerRecordDispatcher(input: {
       return
     }
     if (classification.kind === 'notification') {
+      if (
+        classification.method === 'turn/completed' ||
+        classification.method === 'item/completed'
+      ) {
+        // Losing a completion cannot leave its turn running or turn a successful item into a failure.
+        const message = `Codex sent a completion update over ${limitMb} MB, so Orca could not read its outcome. Check any file changes before retrying.`
+        input.onProtocolFailure(
+          withProviderDiagnostic(new Error(message), providerDiagnostic(message, 'log'))
+        )
+        return
+      }
       // A frame the chat never shows (turn diffs, deltas) stays silent when it is too big, too.
       const shown = classifyProviderFrame('codex', `notification:${classification.method}`, null)
       if (shown === 'timeline-substantive' || shown === 'error-surface') {

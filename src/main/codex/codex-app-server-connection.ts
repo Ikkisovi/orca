@@ -12,6 +12,7 @@ import {
 } from './codex-app-server-session'
 import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-dispatch'
 import { createProviderRecordReader } from '../provider-process/provider-record-reader'
+import { providerDiagnosticOf, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -62,7 +63,10 @@ export async function openCodexAppServerConnection(
   let terminalError: Error | null = null
 
   function buildExitError(cause?: Error): Error {
-    const error = buildCodexAppServerExitError(managed.stderrTail(), cause)
+    const error = withProviderDiagnostic(
+      buildCodexAppServerExitError(managed.stderrTail(), cause),
+      providerDiagnosticOf(cause)
+    )
     return managed.executableMissing ? withMissingProviderExecutable(error) : error
   }
 
@@ -114,6 +118,9 @@ export async function openCodexAppServerConnection(
   const recordReader = createProviderRecordReader({
     stdout: child.stdout,
     onRecord: (parsed, line) => {
+      if (terminalError) {
+        return
+      }
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         handlers.onUnhandledFrame?.('frame:invalid-json', line)
         return
@@ -121,6 +128,9 @@ export async function openCodexAppServerConnection(
       dispatcher.dispatch(parsed as Record<string, unknown>)
     },
     onRejected: (rejected) => {
+      if (terminalError) {
+        return
+      }
       if (rejected.kind === 'invalid-json') {
         handlers.onUnhandledFrame?.('frame:invalid-json', rejected.line)
       } else {
@@ -128,6 +138,9 @@ export async function openCodexAppServerConnection(
       }
     },
     onFatal: (error) => {
+      if (terminalError) {
+        return
+      }
       handleUnexpectedEnd(error)
       void terminateProcessTree()
     }

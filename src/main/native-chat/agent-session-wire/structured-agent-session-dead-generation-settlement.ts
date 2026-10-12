@@ -53,6 +53,10 @@ import {
   type DeadGenerationJournal
 } from './structured-agent-session-unfinished-work'
 import { codexUnopenedSendResolutions } from './structured-agent-session-unopened-send-withdrawal'
+import {
+  boundPayload,
+  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+} from '../agent-session-journal/journal-payload-bounds'
 import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session-replaced-runtime'
 import {
   isUnverifiableTurn,
@@ -146,6 +150,18 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
               surface: 'row'
             }
           ),
+          ...(input.exitFailure?.detail
+            ? {
+                providerFrame: {
+                  provider: input.failureTextContext?.agentName ?? 'agent',
+                  kind: 'provider-exit',
+                  payload: boundPayload(
+                    input.exitFailure.detail.text,
+                    DEFAULT_JOURNAL_PAYLOAD_LIMITS
+                  )
+                }
+              }
+            : {}),
           tone: 'error'
         },
         turnScope: exitedRootTurnScope(withRevisions(items, proven), input.verdict)
