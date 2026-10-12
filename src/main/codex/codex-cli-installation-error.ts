@@ -2,6 +2,11 @@ import type { CodexInstallationProblem } from '../../shared/codex-cli-installati
 import { sayAgentSessionFailureEnglish } from '../../shared/agent-session-failure-copy'
 import { readCodexCliInstallation } from '../preflight/codex-cli-installation'
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentLaunchResolver } from '../runtime/structured-agent-launch-composition'
+import {
+  resolveProviderChildEnv,
+  type ProviderProcessLaunch
+} from '../provider-process/provider-process-launch'
 
 export class CodexCliInstallationError extends AgentSessionPreSpawnError {
   readonly codexInstallation: CodexInstallationProblem
@@ -47,5 +52,24 @@ export async function requireSupportedCodexCli(
   }
   if (result.status === 'unknown') {
     console.warn(`[codex-cli-version] Could not verify ${input.program}; allowing structured chat`)
+  }
+}
+
+/** Check every acquired child against the same sealed launch the app-server will use. */
+export function withSupportedCodexCli<L extends ProviderProcessLaunch>(
+  resolveLaunch: StructuredAgentLaunchResolver<L>,
+  readInstallation: typeof readCodexCliInstallation = readCodexCliInstallation
+): StructuredAgentLaunchResolver<L> {
+  return async (request) => {
+    const launch = await resolveLaunch(request)
+    await requireSupportedCodexCli(
+      {
+        program: launch.command,
+        cwd: launch.cwd,
+        env: resolveProviderChildEnv(launch, process.env)
+      },
+      readInstallation
+    )
+    return launch
   }
 }

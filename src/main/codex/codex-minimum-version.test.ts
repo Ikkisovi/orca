@@ -12,8 +12,16 @@ import {
   failedAcquisitionSettlement
 } from '../native-chat/agent-session-wire/structured-agent-session-failed-create-refusal'
 import { structuredAgentSessionStartFailure } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
-import { CodexCliInstallationError, requireSupportedCodexCli } from './codex-cli-installation-error'
-import { createCodexStructuredLaunchResolver } from './codex-structured-launch-resolution'
+import {
+  CodexCliInstallationError,
+  requireSupportedCodexCli,
+  withSupportedCodexCli
+} from './codex-cli-installation-error'
+import {
+  createCodexStructuredLaunchResolver,
+  TEST_SPAWN_TOKEN
+} from '../runtime/structured-agent-launch-composition.test-support'
+import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
 import { identityFor } from './codex-structured-session-adapter-fixture'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 
@@ -116,16 +124,20 @@ describe('Codex structured launch version admission', () => {
           }
         ]
       }
-      const resolve = createCodexStructuredLaunchResolver({
-        store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
-        resolveCommand: () => '/host/bin/codex',
-        resolveEnvironment: async () => ({ PATH: '/host/bin', HOME: '/host/home' }),
-        resolveLaunchArgs: () => [],
-        resolveWorkspacePath: async () => '/folder',
-        resolveRollout: async () => null
-      })
+      const resolve = withSupportedCodexCli(
+        createCodexStructuredLaunchResolver({
+          store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
+          resolveCommand: () => '/host/bin/codex',
+          resolveEnvironment: async () => ({ PATH: '/host/bin', HOME: '/host/home' }),
+          resolveLaunchArgs: () => [],
+          resolveWorkspacePath: async () => '/folder',
+          resolveRollout: async () => null
+        })
+      )
       vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(true, '0.135.0'))
-      await expect(resolve({ identity: identityFor(value.sessionId) })).rejects.toThrow('0.135.0')
+      await expect(
+        resolve({ identity: identityFor(value.sessionId), spawnToken: TEST_SPAWN_TOKEN })
+      ).rejects.toThrow('0.135.0')
       const probe = vi.mocked(readCodexCliInstallation).mock.calls.at(-1)?.[0]
       expect(probe?.program).toBe('/host/bin/codex')
       expect(probe?.cwd).toBe('/folder')
@@ -133,9 +145,15 @@ describe('Codex structured launch version admission', () => {
       expect(probe?.env?.HOME).toBe('/host/home')
       expect(probe?.env?.CODEX_HOME).toBe('/account')
       vi.mocked(readCodexCliInstallation).mockResolvedValue(codexCliInstallation(true, '0.136.0'))
-      await expect(resolve({ identity: identityFor(value.sessionId) })).resolves.toMatchObject({
-        command: '/host/bin/codex',
-        args: ['app-server']
+      const launch = await resolve({
+        identity: identityFor(value.sessionId),
+        spawnToken: TEST_SPAWN_TOKEN
+      })
+      expect(launch).toMatchObject({ command: '/host/bin/codex', args: ['app-server'] })
+      expect(vi.mocked(readCodexCliInstallation).mock.calls.at(-1)?.[0]).toEqual({
+        program: launch.command,
+        cwd: launch.cwd,
+        env: resolveProviderChildEnv(launch, process.env)
       })
     }
   )
@@ -158,15 +176,20 @@ describe('Codex structured launch version admission', () => {
       vi.mocked(readCodexCliInstallation).mockImplementation(async (input) =>
         codexCliInstallation(true, input.cwd === '/workspace' ? '0.136.0' : '0.135.0')
       )
-      const resolve = createCodexStructuredLaunchResolver({
-        store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
-        resolveCommand: () => '/host/project-aware-codex',
-        resolveEnvironment: async () => ({ PATH: '/host/bin' }),
-        resolveLaunchArgs: () => [],
-        resolveWorkspacePath: async () => '/workspace',
-        resolveRollout: async () => null
-      })
-      expect((await resolve({ identity: identityFor(value.sessionId) })).cwd).toBe('/workspace')
+      const resolve = withSupportedCodexCli(
+        createCodexStructuredLaunchResolver({
+          store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
+          resolveCommand: () => '/host/project-aware-codex',
+          resolveEnvironment: async () => ({ PATH: '/host/bin' }),
+          resolveLaunchArgs: () => [],
+          resolveWorkspacePath: async () => '/workspace',
+          resolveRollout: async () => null
+        })
+      )
+      expect(
+        (await resolve({ identity: identityFor(value.sessionId), spawnToken: TEST_SPAWN_TOKEN }))
+          .cwd
+      ).toBe('/workspace')
     }
   )
 

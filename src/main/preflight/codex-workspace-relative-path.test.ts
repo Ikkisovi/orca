@@ -6,7 +6,11 @@ import { agentSessionRecordFixture } from '../../shared/agent-session-record.tes
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { runProcess } from '@orca/process-host'
-import { createCodexStructuredLaunchResolver } from '../codex/codex-structured-launch-resolution'
+import {
+  createCodexStructuredLaunchResolver,
+  TEST_SPAWN_TOKEN
+} from '../runtime/structured-agent-launch-composition.test-support'
+import { withSupportedCodexCli } from '../codex/codex-cli-installation-error'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { createStructuredAgentEnvironmentResolvers } from '../runtime/structured-agent-shell-environment'
@@ -55,7 +59,7 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
       const sources = {
         resolveCommand: (options?: { pathEnv?: string | null; homePath?: string }) =>
           resolveStructuredAgentCommand('codex', settings, options),
-        resolveLaunchEnvOverlay: () => resolveTuiAgentLaunchEnv('codex', settings.agentDefaultEnv)
+        resolveAgentLaunchEnv: () => resolveTuiAgentLaunchEnv('codex', settings.agentDefaultEnv)
       }
       const environment = createStructuredAgentEnvironmentResolvers(sources)
       const record: AgentSessionRecord = {
@@ -65,20 +69,25 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
         accountHome: { variable: 'CODEX_HOME' as const, path: join(cwd, 'account') },
         location: { ...agentSessionRecordFixture().location, workspaceKind: 'folder' as const }
       }
-      const resolve = createCodexStructuredLaunchResolver({
-        store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
-        resolveCommand: sources.resolveCommand,
-        resolveEnvironment: environment.resolveCodexEnvironment,
-        resolveLaunchArgs: () => [],
-        resolveWorkspacePath: async () => cwd,
-        resolveRollout: async () => null
-      })
+      const resolve = withSupportedCodexCli(
+        createCodexStructuredLaunchResolver({
+          store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
+          resolveCommand: sources.resolveCommand,
+          resolveEnvironment: () => environment.resolveAgentEnvironment('codex'),
+          resolveLaunchArgs: () => [],
+          resolveWorkspacePath: async () => cwd,
+          resolveRollout: async () => null
+        })
+      )
       for (const resume of [false, true]) {
         const value = agentSessionRecordFixture()
         record.providerHandleChain = resume
           ? [{ ...value.providerHandleChain[0], handle: codexProviderHandle('thread') }]
           : []
-        const launch = await resolve({ identity: identityFor(record.sessionId) })
+        const launch = await resolve({
+          identity: identityFor(record.sessionId),
+          spawnToken: TEST_SPAWN_TOKEN
+        })
         const actual = await runProcess({
           program: launch.command,
           cwd: launch.cwd,
@@ -88,12 +97,14 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
         expect(actual.code).toBe(0)
         expect(actual.stdout.trim()).toBe('codex-cli 0.136.0')
         await writeFile(versionFile, '0.135.0')
-        await expect(resolve({ identity: identityFor(record.sessionId) })).rejects.toThrow(
-          '0.135.0'
-        )
+        await expect(
+          resolve({ identity: identityFor(record.sessionId), spawnToken: TEST_SPAWN_TOKEN })
+        ).rejects.toThrow('0.135.0')
         // An external update is checked again on the next chat start.
         await writeFile(versionFile, '0.136.0')
-        await expect(resolve({ identity: identityFor(record.sessionId) })).resolves.toMatchObject({
+        await expect(
+          resolve({ identity: identityFor(record.sessionId), spawnToken: TEST_SPAWN_TOKEN })
+        ).resolves.toMatchObject({
           cwd
         })
       }
