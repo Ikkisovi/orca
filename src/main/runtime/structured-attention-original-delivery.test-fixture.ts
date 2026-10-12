@@ -3,11 +3,11 @@ import {
   type MobileNotificationDismissEvent
 } from './runtime-mobile-notification-controller'
 
-export function captureOriginalDeliveryRetirement(directory: string): {
+export async function captureOriginalDeliveryRetirement(directory: string): Promise<{
   originalEpoch: string
   restartedEpoch: string
   event: MobileNotificationDismissEvent
-} {
+}> {
   const original = new RuntimeMobileNotificationController()
   original.configureDismissalStore(directory)
   original.dispatch({
@@ -28,6 +28,7 @@ export function captureOriginalDeliveryRetirement(directory: string): {
       cause: { kind: 'prompt', promptId: 'A' }
     }
   })
+  await original.flushDismissals()
   const restarted = new RuntimeMobileNotificationController()
   restarted.configureDismissalStore(directory)
   let event: MobileNotificationDismissEvent | undefined

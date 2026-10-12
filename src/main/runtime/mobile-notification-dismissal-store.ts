@@ -1,11 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  writeSecureJsonFile,
-  hardenExistingSecureFile,
-  isUnreadableError
-} from '../../shared/secure-file'
-import { removeStaleDurableWriteTempFiles } from '../durable-file-write'
+import { isUnreadableError } from '../../shared/secure-file'
+import { AtomicSnapshotWriter } from '../persistence/atomic-snapshot-writer'
 import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
 import type { DeliveredNotificationIdentity } from '../../shared/mobile-notification-identity'
 import {
@@ -20,18 +16,18 @@ export type DeliveredNotificationRecord = DeliveredNotificationIdentity & {
 type RecordEntry = DeliveredNotificationRecord & { dismissedThrough: number; expiresAt: number }
 const LIMIT = 4096
 const RETENTION_MS = 7 * 86400_000
-const STALE_WRITE_TEMP_AGE_MS = 86400_000
 
 export class MobileNotificationDismissalStore {
   private readonly path: string
   private entries: RecordEntry[] = []
   private unreadable = false
+  // Why not the secure writer: this holds notification ids, not credentials, and its synchronous
+  // Windows icacls launches froze every window on each notification (STA-9692).
+  private readonly writer: AtomicSnapshotWriter
   constructor(userDataPath: string) {
     this.path = join(userDataPath, 'mobile-notification-dismissals.json')
-    // Why: a write killed between writeFile and rename (e.g. a hung icacls, #20497) orphans its temp forever.
-    void removeStaleDurableWriteTempFiles(this.path, { minimumAgeMs: STALE_WRITE_TEMP_AGE_MS })
+    this.writer = new AtomicSnapshotWriter(() => this.path, { fileMode: 0o600 })
     try {
-      hardenExistingSecureFile(this.path)
       const value: unknown = JSON.parse(readFileSync(this.path, 'utf8'))
       if (Array.isArray(value)) {
         this.entries = value.flatMap(readEntry).slice(-LIMIT)
@@ -97,8 +93,18 @@ export class MobileNotificationDismissalStore {
     next = next.slice(-LIMIT)
     this.entries = next
     if (!this.unreadable) {
-      writeSecureJsonFile(this.path, next)
+      // Coalesced: a burst of records costs one write of the latest entries.
+      this.writer
+        .write(() => JSON.stringify(this.entries, null, 2))
+        .catch((error: unknown) => {
+          console.warn('[notifications] Could not persist dismissal recovery state', error)
+        })
     }
+  }
+
+  /** Resolves once every recorded change has been written or has failed to write. */
+  flush(): Promise<void> {
+    return this.writer.waitForPendingWrite().catch(() => {})
   }
 
   liveDeliveries(prefix = ''): DeliveredNotificationRecord[] {

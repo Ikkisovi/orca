@@ -94,6 +94,8 @@ export function attachMainWindowCoreServices(
         state.isQuitting = true
         state.desktopRelayService?.fenceAndCloseNow()
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
+        // Why: renderer relaunch exits via app.exit(0), which skips the quit pipeline's flush.
+        await runtime.flushNotificationDismissals()
       },
       onOrcaProfileAuthMutation: () => {
         // Why: a provider whose launch-time install failed is installed by the next auth change.

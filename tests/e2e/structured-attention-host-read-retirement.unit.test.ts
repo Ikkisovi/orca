@@ -213,6 +213,7 @@ it('a restart sends the original delivery fence in the existing native gateway f
   if (!original) {
     throw new Error('prompt not delivered')
   }
+  await h.controller.flushDismissals()
   const restarted = new RuntimeMobileNotificationController()
   restarted.configureDismissalStore(directory)
   const gateway = createHarness({

@@ -5,6 +5,7 @@ import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../quit-teardown-deadline'
 const settled = () => vi.fn(async () => {})
 const idle = () => vi.fn()
 const stopAgentHookServer = idle()
+const stopStructuredAgentSessionRuntime = settled()
 
 // Every teardown member settles except the profile store, so only the writer can hold quit.
 const dependencies: Record<string, Record<string, unknown>> = {
@@ -19,7 +20,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../agent-hooks/managed-agent-hook-controls': {
     removeManagedAgentHooksAsync: vi.fn(async () => [])
   },
-  '../runtime/structured-agent-session-runtime': { stopStructuredAgentSessionRuntime: settled() },
+  '../runtime/structured-agent-session-runtime': { stopStructuredAgentSessionRuntime },
   '../runtime/structured-agent-session-runtime-teardown': {
     setStructuredAgentSessionTeardownTrigger: idle()
   },
@@ -58,7 +59,10 @@ afterEach(() => {
   vi.resetModules()
 })
 
-async function startQuit(flushFinalOrThrowAsync: () => Promise<void>) {
+async function startQuit(
+  flushFinalOrThrowAsync: () => Promise<void>,
+  runtime?: Record<string, unknown>
+) {
   vi.resetModules()
   vi.useFakeTimers()
   const app = Object.assign(new EventEmitter(), { quit: vi.fn() })
@@ -68,7 +72,13 @@ async function startQuit(flushFinalOrThrowAsync: () => Promise<void>) {
     freezeWritesAsync: settled()
   }
   const profileStateAdmission: typeof admission | undefined = admission
-  const state = { isQuitting: false, watcherShutdownDone: true, store, profileStateAdmission }
+  const state = {
+    isQuitting: false,
+    watcherShutdownDone: true,
+    store,
+    profileStateAdmission,
+    runtime
+  }
   vi.doMock('electron', () => ({ app }))
   vi.doMock('./main-process-state', () => ({ mainProcessState: state }))
   for (const [moduleName, exports] of Object.entries(dependencies)) {
@@ -112,4 +122,25 @@ it('releases admission only after the final flush and freeze complete', async ()
 it('stops the hook server without clearing the status store the chat teardown reads', async () => {
   await startQuit(async () => {})
   expect(stopAgentHookServer).toHaveBeenCalledWith({ keepStatus: true })
+})
+
+it('holds quit for the notification dismissal flush, started after chat teardown settles', async () => {
+  const flushNotificationDismissals = vi.fn(() => new Promise<void>(() => {}))
+  const { app } = await startQuit(async () => {}, {
+    getOffscreenBrowserBackend: () => null,
+    getAgentBrowserBridge: () => null,
+    getEmulatorBridge: () => null,
+    disposeSkillUploadSessions: settled(),
+    getRuntimeId: () => undefined,
+    flushNotificationDismissals
+  })
+  expect(stopStructuredAgentSessionRuntime).toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(flushNotificationDismissals).toHaveBeenCalledOnce()
+  expect(app.quit).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(WILL_QUIT_TEARDOWN_DEADLINE_MS)
+  expect(console.warn).toHaveBeenCalledWith('[shutdown] Quit teardown deadline reached', {
+    pendingTeardowns: ['notification-dismissals']
+  })
+  expect(app.quit).toHaveBeenCalledOnce()
 })
