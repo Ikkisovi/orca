@@ -43,11 +43,7 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   })
   const outcome = mobileStructuredSendDelivery(result)
   if (outcome.error !== null) {
-    if (outcome.failure) {
-      input.onError(outcome.error, { failure: outcome.failure })
-    } else {
-      input.onError(outcome.error)
-    }
+    input.onError(outcome.error)
   }
   return outcome.outcome
 }
