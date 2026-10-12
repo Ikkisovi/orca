@@ -174,6 +174,41 @@ describe('memoized worktree rows', () => {
     expect(agentSpinnerRender).toHaveBeenCalledTimes(++expectedRenders)
   })
 
+  it('skips a value-equal item and re-renders for time, callbacks and nested agent fields', async () => {
+    const onPress = () => undefined
+    const row = (item: TestItem, overrides: { now?: number; onPress?: () => void } = {}) =>
+      createElement(WorktreeListRow, {
+        item,
+        isReadOnly: false,
+        now: overrides.now ?? 2_000,
+        repoColor: '#000000',
+        repoIcon: { type: 'emoji', emoji: 'o' },
+        status: item.status,
+        onPress: overrides.onPress ?? onPress
+      })
+    await act(async () => {
+      renderer = create(row(baseItem))
+    })
+    expect(agentSpinnerRender).toHaveBeenCalledTimes(1)
+
+    // A fresh parse of the same row, with a fresh repo icon object, is not a change.
+    await act(async () => renderer!.update(row(structuredClone(baseItem))))
+    expect(agentSpinnerRender).toHaveBeenCalledTimes(1)
+
+    await act(async () => renderer!.update(row(baseItem, { now: 32_000 })))
+    expect(agentSpinnerRender).toHaveBeenCalledTimes(2)
+
+    const nestedChange = structuredClone(baseItem)
+    nestedChange.agents![0]!.lastAssistantMessage = 'Tests pass'
+    await act(async () => renderer!.update(row(nestedChange, { now: 32_000 })))
+    expect(agentSpinnerRender).toHaveBeenCalledTimes(3)
+
+    await act(async () =>
+      renderer!.update(row(nestedChange, { now: 32_000, onPress: () => undefined }))
+    )
+    expect(agentSpinnerRender).toHaveBeenCalledTimes(4)
+  })
+
   it('memoizes agent rows without hiding agent updates', async () => {
     const firstAgent = agent()
     await act(async () => {

@@ -14,7 +14,7 @@ import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-
 import { triggerMediumImpact } from '../platform/haptics'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { Worktree } from '../worktree/workspace-list-types'
-import { areWorktreesEqual } from '../worktree/worktree-list-snapshot'
+import { areStructurallyEqual } from '../worktree/structural-equality'
 import { AgentSpinner } from './AgentSpinner'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
@@ -206,23 +206,7 @@ function WorktreeListRowComponent({
   )
 }
 
-// Why: rows arrive freshly parsed on every changed poll, so the item compares by value;
-// every other prop (callbacks, `now`, flags) by identity.
-function areRowPropsEqual(prev: Props, next: Props): boolean {
-  const { item: prevItem, ...prevRest } = prev
-  const { item: nextItem, ...nextRest } = next
-  const nextEntries = new Map(Object.entries(nextRest))
-  const prevEntries = Object.entries(prevRest)
-  return (
-    prevEntries.length === nextEntries.size &&
-    prevEntries.every(
-      ([key, value]) => nextEntries.has(key) && Object.is(value, nextEntries.get(key))
-    ) &&
-    areWorktreesEqual(prevItem, nextItem)
-  )
-}
-
-export const WorktreeListRow = memo(WorktreeListRowComponent, areRowPropsEqual)
+export const WorktreeListRow = memo(WorktreeListRowComponent, areStructurallyEqual)
 
 const styles = StyleSheet.create({
   worktreeRow: {
