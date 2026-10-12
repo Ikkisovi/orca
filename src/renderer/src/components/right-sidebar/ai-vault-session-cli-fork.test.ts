@@ -24,11 +24,11 @@ describe('Resume in New CLI eligibility', () => {
   })
 
   it.each(['opencode', 'opencode2', 'omp'] as const)(
-    'withholds it from a %s chat row, whose CLI cannot open a copy',
+    'offers it for a %s chat row, whose chat makes the copy',
     (agent) => {
-      expect(
-        aiVaultSessionCliForkWorktreeId({ agent, structuredSession: OWNED }, RESUMABLE)
-      ).toBeNull()
+      expect(aiVaultSessionCliForkWorktreeId({ agent, structuredSession: OWNED }, RESUMABLE)).toBe(
+        'repo-1::worktree-2'
+      )
     }
   )
 

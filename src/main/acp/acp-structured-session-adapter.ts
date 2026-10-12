@@ -44,6 +44,7 @@ import { writeAcpSessionOption } from './acp-structured-options'
 import { readAcpRecoveryHistory } from './acp-recovery-history'
 import { withLiveCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { stopAcpChildren, acpChildStopCapabilities } from './acp-structured-child-stop'
+import { copyAcpConversation } from './acp-conversation-copy'
 
 export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   /** Live children, and ones whose exit is not yet proven; a proven exit removes its entry. */
@@ -56,6 +57,9 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
   providerHistoryWindow: NonNullable<StructuredAgentSessionAdapter['providerHistoryWindow']> = ({
     identity
   }) => readAcpRecoveryHistory(this.deps, identity)
+
+  copyConversation: NonNullable<StructuredAgentSessionAdapter['copyConversation']> = (input) =>
+    copyAcpConversation(this.deps, input)
 
   // The child runs on this runtime's own machine; Windows needs process start-time proof.
   supportsLocation = (location: AgentSessionExecutionLocation): boolean =>
@@ -355,11 +359,6 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     return session
   }
 
-  private stopGraceMs(): number {
-    return this.deps.stopGraceMs ?? ACP_STOP_GRACE_MS
-  }
-
-  private now(): number {
-    return (this.deps.now ?? Date.now)()
-  }
+  private readonly stopGraceMs = (): number => this.deps.stopGraceMs ?? ACP_STOP_GRACE_MS
+  private readonly now = (): number => (this.deps.now ?? Date.now)()
 }
