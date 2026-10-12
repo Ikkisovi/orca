@@ -1,5 +1,6 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../../shared/browser-annotation-viewport-bridge'
+import { parseBrowserAnnotationViewportReport } from '../../../../../shared/browser-annotation-viewport-report'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -7,7 +8,10 @@ import {
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 import { rememberLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
-import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
+import {
+  applyBrowserAnnotationViewportReport,
+  type BrowserOverlayViewport
+} from '../describe-page/browser-annotation-geometry'
 import {
   getBrowserDisplayTitle,
   isChromiumErrorPage,
@@ -189,23 +193,9 @@ export function createBrowserPageWebviewNavigationHandlers({
     if (!message.startsWith(prefix)) {
       return
     }
-    try {
-      const next = JSON.parse(message.slice(prefix.length)) as {
-        scrollX?: unknown
-        scrollY?: unknown
-      }
-      const scrollX =
-        typeof next.scrollX === 'number' && Number.isFinite(next.scrollX) ? next.scrollX : 0
-      const scrollY =
-        typeof next.scrollY === 'number' && Number.isFinite(next.scrollY) ? next.scrollY : 0
-      setBrowserOverlayViewport((current) => {
-        if (current.scrollX === scrollX && current.scrollY === scrollY) {
-          return current.version === 0 ? { ...current, version: 1 } : current
-        }
-        return { scrollX, scrollY, version: current.version + 1 }
-      })
-    } catch {
-      // Ignore unrelated or malformed guest console output.
+    const report = parseBrowserAnnotationViewportReport(message.slice(prefix.length))
+    if (report) {
+      setBrowserOverlayViewport((current) => applyBrowserAnnotationViewportReport(current, report))
     }
   }
 

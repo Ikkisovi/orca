@@ -1,4 +1,5 @@
 import type { BrowserGrabRect } from './browser-grab-types'
+import { isValidBrowserGrabRect } from './browser-annotation-viewport-report'
 
 export type BrowserAnnotationViewportBridgeMarker = {
   id: string
@@ -25,28 +26,11 @@ export type BrowserAnnotationViewportBridgeOptions = {
 
 export const BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID = 1207
 export const BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX = '__orca_annotation_viewport__:'
+// Set by the grab overlay on the element it froze on, so the isolated bridge can measure it.
+export const BROWSER_GRAB_SELECTED_ATTRIBUTE = 'data-orca-grab-selected'
 
 export function isValidBrowserAnnotationViewportBridgeToken(value: unknown): value is string {
   return typeof value === 'string' && /^[a-zA-Z0-9_-]{16,80}$/.test(value)
-}
-
-function isValidBrowserGrabRect(value: unknown): value is BrowserGrabRect {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-  const rect = value as Record<string, unknown>
-  return (
-    typeof rect.x === 'number' &&
-    Number.isFinite(rect.x) &&
-    typeof rect.y === 'number' &&
-    Number.isFinite(rect.y) &&
-    typeof rect.width === 'number' &&
-    Number.isFinite(rect.width) &&
-    rect.width >= 0 &&
-    typeof rect.height === 'number' &&
-    Number.isFinite(rect.height) &&
-    rect.height >= 0
-  )
 }
 
 export function isValidBrowserAnnotationViewportBridgeMarkers(
@@ -93,6 +77,7 @@ export function buildBrowserAnnotationViewportBridgeScript({
   const prefix = ${JSON.stringify(BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX)};
   const stateKey = '__orcaBrowserAnnotationViewportBridge';
   const hostAttribute = 'data-orca-browser-annotation-overlay';
+  const selectedAttribute = ${JSON.stringify(BROWSER_GRAB_SELECTED_ATTRIBUTE)};
   const markerSize = 24;
 
   const removeOverlay = (state) => {
@@ -114,6 +99,9 @@ export function buildBrowserAnnotationViewportBridgeScript({
     if (state.onBeforeUnload) {
       window.removeEventListener('beforeunload', state.onBeforeUnload);
     }
+    if (state.targetObserver) {
+      state.targetObserver.disconnect();
+    }
     removeOverlay(state);
   };
 
@@ -132,10 +120,42 @@ export function buildBrowserAnnotationViewportBridgeScript({
     scrollY: toNumber(window.scrollY, toNumber(window.pageYOffset, 0))
   });
 
-  const emitViewport = () => {
+  // Why: the card must follow the element itself, not a click-time copy; the grab overlay
+  // marks it in the shared DOM because this world cannot see the page's objects.
+  const trackTarget = (state) => {
+    const current = state.target;
+    const next = !emitViewportMessages
+      ? null
+      : current && current.isConnected && current.hasAttribute(selectedAttribute)
+        ? current
+        : document.querySelector('[' + selectedAttribute + ']');
+    if (next !== current) {
+      state.target = next;
+      if (state.targetObserver) {
+        state.targetObserver.disconnect();
+        if (next) {
+          state.targetObserver.observe(next);
+          state.targetObserver.observe(document.documentElement);
+        }
+      }
+    }
+    return next;
+  };
+
+  const readTarget = (target) => {
+    if (!target) return null;
+    const rect = target.getBoundingClientRect();
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  };
+
+  const emitViewport = (state) => {
+    const target = trackTarget(state);
     if (!emitViewportMessages) return;
     try {
-      console.debug(prefix + token + ':' + JSON.stringify(readViewport()));
+      const report = readViewport();
+      report.viewportWidth = toNumber(window.innerWidth, 0);
+      report.target = readTarget(target);
+      console.debug(prefix + token + ':' + JSON.stringify(report));
     } catch (e) {}
   };
 
@@ -238,7 +258,9 @@ export function buildBrowserAnnotationViewportBridgeScript({
     markers: [],
     shadowRoot: null,
     requestUpdate: null,
-    onBeforeUnload: null
+    onBeforeUnload: null,
+    target: null,
+    targetObserver: null
   };
 
   state.requestUpdate = () => {
@@ -246,9 +268,12 @@ export function buildBrowserAnnotationViewportBridgeScript({
     state.raf = requestAnimationFrame(() => {
       state.raf = 0;
       positionMarkers(state);
-      state.emitViewport();
+      state.emitViewport(state);
     });
   };
+  if (typeof ResizeObserver === 'function') {
+    state.targetObserver = new ResizeObserver(state.requestUpdate);
+  }
 
   // Navigation can hold IPC cleanup until the next document finishes loading.
   state.onBeforeUnload = () => {
