@@ -157,8 +157,13 @@ async function buildRuntimeAgentTerminalStartupOptions(
       isRemote,
       ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
       ...(opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : {}),
-      // Quoted for the shell the PTY really is.
-      shell: agentLaunchQuotingShell(runtime),
+      // Quoted for the shell the PTY really is. TEMPORARY parity (follow-up 1): a "+" tab
+      // (`wslShellRule: 'window'`) quotes for the Terminal shell setting, as the window does.
+      shell: agentLaunchQuotingShell(
+        opts.wslShellRule === 'window'
+          ? { ...runtime, pty: { ...runtime.pty, shellOverride: settings.terminalWindowsShell } }
+          : runtime
+      ),
       sessionOptions: host.toSessionOptions(opts.launchPreferences)
     }),
     prompt: opts.startupPrompt ?? '',

@@ -27,7 +27,8 @@ function plus(
   client: LaunchClient,
   workspace: LaunchWorkspace,
   request: WindowRequestFacts,
-  provider: WindowProviderFacts
+  provider: WindowProviderFacts,
+  settings: Record<string, unknown> = {}
 ): WindowLaunchCase {
   return {
     name: `${via} "+", ${name}`,
@@ -37,7 +38,7 @@ function plus(
     producer: { kind: 'plus', agent: 'claude', via },
     request,
     provider,
-    settings: { agentDefaultArgs: { claude: ARGS } }
+    settings: { agentDefaultArgs: { claude: ARGS }, ...settings }
   }
 }
 
@@ -55,5 +56,19 @@ export const PLUS_LAUNCH_CASES: WindowLaunchCase[] = [
     },
     { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null }
   ),
-  plus('dashboard', 'Linux repo', 'linux', { kind: 'repo', path: POSIX_PATH }, quoted(posix), ZSH)
+  plus('dashboard', 'Linux repo', 'linux', { kind: 'repo', path: POSIX_PATH }, quoted(posix), ZSH),
+  // The window quotes for the Terminal shell setting, not the Windows project's PowerShell.
+  plus(
+    'menu',
+    'Windows C: repo, project Windows, Terminal shell WSL',
+    'win32',
+    { kind: 'repo', path: WIN_PATH, projectRuntime: { kind: 'windows-host' } },
+    {
+      ...quoted(posix),
+      shellOverride: 'powershell.exe',
+      projectRuntime: { kind: 'windows-host', reason: 'project-override' }
+    },
+    { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null },
+    { terminalWindowsShell: 'wsl.exe' }
+  )
 ]
