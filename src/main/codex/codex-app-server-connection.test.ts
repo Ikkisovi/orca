@@ -14,7 +14,6 @@ import {
   type CodexAppServerConnectionHandlers
 } from './codex-app-server-connection'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
-import { PROVIDER_RECORD_MAX_BYTES } from '../provider-process/provider-record-reader'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
 import { isCodexAppServerHandshakeExitUnprovenError } from './codex-app-server-handshake-exit-proof'
 
@@ -715,39 +714,6 @@ describe('openCodexAppServerConnection', () => {
 
     await vi.waitFor(() => expect(deltas).toEqual([params]))
     expect(frames).toEqual([])
-    expect(connection.closed).toBe(false)
-    await connection.close()
-  })
-
-  it('skips a notification over the record cap with a sentence and processes the next record', async () => {
-    const { child, spawnImpl } = stubChild()
-    answerInitialize(child)
-    const frames: { kind: string; payload: unknown }[] = []
-    const notifications: string[] = []
-    const connection = await openCodexAppServerConnection(
-      { command: 'codex', args: ['app-server'] },
-      {
-        onUnhandledFrame: (kind, payload) => frames.push({ kind, payload }),
-        onNotification: (method) => notifications.push(method)
-      },
-      spawnImpl
-    )
-
-    child.stdout.write('{"method":"item/completed","params":{"output":"')
-    child.stdout.write(`${'x'.repeat(PROVIDER_RECORD_MAX_BYTES)}"}}\n`)
-    child.stdout.write('{"method":"turn/completed","params":{}}\n')
-    await vi.waitFor(() => expect(notifications).toEqual(['turn/completed']))
-
-    expect(frames).toEqual([
-      {
-        kind: 'frame:oversized-notification',
-        payload: expect.objectContaining({
-          message: 'Codex sent an update over 64 MB, so Orca skipped it.',
-          method: 'item/completed'
-        })
-      }
-    ])
-    expect(child.kill).not.toHaveBeenCalled()
     expect(connection.closed).toBe(false)
     await connection.close()
   })

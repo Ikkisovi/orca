@@ -39,10 +39,9 @@ describe('createProviderRecordReader', () => {
     await new Promise((resolve) => setImmediate(resolve))
 
     expect(rejected).toEqual([])
-    expect(records).toHaveLength(1)
-    expect((records[0] as { data: string }).data.length).toBe(
-      PROVIDER_RECORD_MAX_BYTES - head.length - tail.length
-    )
+    expect(records).toEqual([
+      { data: 'x'.repeat(PROVIDER_RECORD_MAX_BYTES - head.length - tail.length) }
+    ])
   })
 
   it('rejects a record over the cap as it crosses it, then parses the next record', async () => {
