@@ -8,6 +8,7 @@ import { ActiveSettingsSectionProvider } from './SettingsSection'
 import { getChatAppearanceSearchEntries } from './chat-appearance-search'
 import { getChatNamingSearchEntry } from './chat-naming-search'
 import { getChatInlineVisualsSearchEntry } from './chat-inline-visuals-search'
+import { getChatBehaviorSearchEntries } from './chat-behavior-search'
 import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { buildCmdJSettingsResults } from '../cmd-j/palette-results'
 import { isSettingsNavigationTarget } from '@/lib/settings-navigation-types'
@@ -49,6 +50,7 @@ function renderChat(
         writeSourceControlAiSettings={async () => {}}
         searchEntries={[
           ...getChatAppearanceSearchEntries(),
+          ...getChatBehaviorSearchEntries(),
           ...(showDesktopOnlySettings
             ? [getChatNamingSearchEntry(), getChatInlineVisualsSearchEntry()]
             : [])
@@ -134,6 +136,40 @@ describe('Chat settings page', () => {
     expect(appearance?.contains(appearanceCard)).toBe(true)
     expect(names?.contains(namesCard)).toBe(true)
     expect(container.querySelectorAll('#chat-names')).toHaveLength(1)
+  })
+
+  it('holds the chat session settings that used to live under Experimental', () => {
+    const { container, updateSettings } = renderChat(true)
+    const behavior = container.querySelector('#chat-behavior')
+    expect(screen.getByRole('heading', { name: 'Behavior', level: 3 })).toBeTruthy()
+    const resume = screen.getByRole('switch', { name: 'Toggle automatic resume after a restart' })
+    const shellEnv = screen.getByRole('switch', { name: 'Toggle using your shell environment' })
+    expect(behavior?.contains(resume)).toBe(true)
+    expect(behavior?.contains(shellEnv)).toBe(true)
+    fireEvent.click(resume)
+    expect(updateSettings).toHaveBeenCalledWith({ nativeChatResumeWorkOnRestart: true })
+  })
+
+  it.each([
+    ['resume', 'chat-resume-on-restart'],
+    ['environment variables', 'chat-shell-environment'],
+    ['queue', 'chat-queue-follow-ups']
+  ])('finds %s on the Chat page and resolves its deep link', (query, targetSectionId) => {
+    state.settingsSearchQuery = query
+    renderChat(true)
+    expect(screen.queryByRole('spinbutton', { name: 'Text size' })).toBeNull()
+    const sections = buildSettingsNavigationMetadata({
+      isMac: true,
+      isWindows: false,
+      isWebClient: false,
+      nativeChatEnabled: true,
+      repos: []
+    })
+    const results = buildCmdJSettingsResults(sections).filter(
+      (entry) => entry.targetSectionId === targetSectionId
+    )
+    expect(results).toHaveLength(1)
+    expect(results[0]?.sectionId).toBe('chat')
   })
 
   it('unmounts the page when the opt-in is disabled while it is selected', () => {
