@@ -19567,15 +19567,5 @@
   },
   "projectField": {
     "updateFailed": "无法更新项目字段"
-  },
-  "codex": {
-    "maintenance": {
-      "installing": "正在安装…",
-      "install": "安装 Codex",
-      "exitCode": "命令已退出，退出代码为 {{code}}",
-      "logTitle": "Codex 设置日志",
-      "copyLog": "复制日志",
-      "installFailed": "无法安装 Codex。请重试。"
-    }
   }
 }

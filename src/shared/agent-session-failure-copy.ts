@@ -5,6 +5,7 @@ import {
   CLAUDE_PROFILE_MISSING_MESSAGE,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
 } from './claude-profile-routing'
+import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
 
 /** Sentences a refusal notice shows too, so a chat says them one way. */
 export const TERMINAL_AGENT_HOLDS_CHAT = 'This chat is still open in a terminal agent.'
@@ -161,6 +162,23 @@ export type AgentSessionFailureSay = (
   id: AgentSessionFailureCopyId,
   values?: AgentSessionFailureCopyValues
 ) => string
+
+export function codexInstallationFailureWords(
+  refusal: AgentSessionRefusalReference | undefined,
+  say: AgentSessionFailureSay
+): string | null {
+  const installation =
+    refusal?.code === 'agent_session_operation_invalid'
+      ? refusal.details?.codexInstallation
+      : undefined
+  return installation
+    ? say(installation.installedVersion === null ? 'cliMissing' : 'codexCliTooOld', {
+        agent: 'Codex',
+        installedVersion: installation.installedVersion ?? '',
+        minimumVersion: installation.minimumVersion
+      })
+    : null
+}
 
 /** The host's words, and any surface without translations. */
 export const sayAgentSessionFailureEnglish: AgentSessionFailureSay = (id, values = {}) => {

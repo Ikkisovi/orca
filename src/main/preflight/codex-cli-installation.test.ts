@@ -1,6 +1,3 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readCodexCliInstallation } from './codex-cli-installation'
 
@@ -10,27 +7,18 @@ vi.mock('@orca/process-host', async (original) => ({
   runProcess
 }))
 
-const roots: string[] = []
-async function binary(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'codex-installation-test-'))
-  roots.push(root)
-  const file = join(root, 'codex')
-  await writeFile(file, 'fake binary; never executed')
-  return file
-}
 function prints(stdout: string, timedOut = false): void {
   runProcess.mockResolvedValue({ code: 0, stdout, stderr: '', timedOut })
 }
-afterEach(async () => {
+afterEach(() => {
   vi.restoreAllMocks()
   vi.useRealTimers()
   runProcess.mockReset()
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
 describe('Codex installation version probes', () => {
   it('probes every read and sees changes behind an unchanged launcher', async () => {
-    const program = await binary()
+    const program = '/fake/codex'
     const input = { program, env: { PATH: '/launch/path' } }
     for (const version of ['0.135.0', '0.136.0', '0.135.0']) {
       prints(`company-wrapper 0.1.0\ncodex-cli ${version}`)
@@ -49,7 +37,7 @@ describe('Codex installation version probes', () => {
   })
 
   it('allows a timeout and reads the next version without waiting', async () => {
-    const program = await binary()
+    const program = '/fake/codex'
     prints('codex-cli 0.135.0', true)
     expect((await readCodexCliInstallation({ program })).status).toBe('unknown')
     prints('codex-cli 0.136.0')
@@ -57,18 +45,12 @@ describe('Codex installation version probes', () => {
     expect(runProcess).toHaveBeenCalledTimes(2)
   })
 
-  it('proves a missing binary from the filesystem and allows an installed binary with a broken interpreter', async () => {
-    const program = await binary()
-    expect((await readCodexCliInstallation({ program: join(program, 'missing') })).status).toBe(
-      'unknown'
-    )
-    expect(
-      (await readCodexCliInstallation({ program: join(program, '..', 'missing') })).status
-    ).toBe('missing')
-    expect(runProcess).not.toHaveBeenCalled()
-    runProcess.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
-    expect((await readCodexCliInstallation({ program })).status).toBe('unknown')
-    runProcess.mockRejectedValue(Object.assign(new Error('unavailable'), { code: 'EACCES' }))
-    expect((await readCodexCliInstallation({ program: await binary() })).status).toBe('unknown')
-  })
+  it.each(['ENOENT', 'EACCES'])(
+    'leaves a failed version spawn (%s) to the existing chat failure',
+    async (code) => {
+      const program = '/fake/codex'
+      runProcess.mockRejectedValue(Object.assign(new Error('unavailable'), { code }))
+      expect((await readCodexCliInstallation({ program })).status).toBe('unknown')
+    }
+  )
 })

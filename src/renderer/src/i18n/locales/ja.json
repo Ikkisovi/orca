@@ -19567,15 +19567,5 @@
   },
   "projectField": {
     "updateFailed": "プロジェクトフィールドを更新できませんでした"
-  },
-  "codex": {
-    "maintenance": {
-      "installing": "インストール中…",
-      "install": "Codex をインストール",
-      "exitCode": "コマンドが終了コード {{code}} で終了しました",
-      "logTitle": "Codex セットアップログ",
-      "copyLog": "ログをコピー",
-      "installFailed": "Codex をインストールできませんでした。再試行してください。"
-    }
   }
 }

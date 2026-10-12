@@ -19567,15 +19567,5 @@
   },
   "projectField": {
     "updateFailed": "프로젝트 필드를 업데이트하지 못했습니다"
-  },
-  "codex": {
-    "maintenance": {
-      "installing": "설치 중…",
-      "install": "Codex 설치",
-      "exitCode": "명령이 종료 코드 {{code}}로 종료되었습니다",
-      "logTitle": "Codex 설정 로그",
-      "copyLog": "로그 복사",
-      "installFailed": "Codex를 설치하지 못했습니다. 다시 시도하세요."
-    }
   }
 }

@@ -2,18 +2,33 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session-journal-schemas'
 import { MessageRow } from './NativeChatMessageRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { i18n } from '@/i18n/i18n'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import {
   NativeChatOrcaStopContext,
   type NativeChatOrcaStopView
 } from './native-chat-orca-stop-context'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+
+afterEach(async () => {
+  cleanup()
+  await i18n.changeLanguage('en')
+})
+
+it('keeps a skipped compaction warning truthful instead of showing the success separator', () => {
+  renderStatus({
+    kind: 'status',
+    tone: 'warning',
+    text: 'Nothing to compact (session too small)',
+    presentation: 'compaction-skipped'
+  })
+  expect(screen.getByText('Nothing to compact (session too small)')).toBeInTheDocument()
+  expect(screen.queryByText('Context compacted')).toBeNull()
+})
 
 function orcaStopView(
   hostLabel: string | null,
@@ -52,22 +67,6 @@ function renderStatus(
     </NativeChatOrcaStopContext.Provider>
   )
 }
-
-afterEach(async () => {
-  cleanup()
-  await i18n.changeLanguage('en')
-})
-
-it('keeps a skipped compaction warning truthful instead of showing the success separator', () => {
-  renderStatus({
-    kind: 'status',
-    tone: 'warning',
-    text: 'Nothing to compact (session too small)',
-    presentation: 'compaction-skipped'
-  })
-  expect(screen.getByText('Nothing to compact (session too small)')).toBeInTheDocument()
-  expect(screen.queryByText('Context compacted')).toBeNull()
-})
 
 const LEGACY_TEXT =
   'Codex stopped while this response was in progress. You can continue in this conversation.'
@@ -294,15 +293,14 @@ describe('notice rows', () => {
     'keeps the host fallback for facts this client cannot fully understand (%j)',
     async (failure) => {
       await i18n.changeLanguage('ja')
-      const row = {
+      const newerRow = {
         kind: 'status',
         tone: 'error',
         text: 'Future host guidance',
         failure
       }
-      if (!isAdmissibleAgentJournalItemBody(row) || row.kind !== 'status') {
-        throw new Error('Future host row is not an admissible status')
-      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: simulates an older client receiving a newer host's unknown failure fact.
+      const row = newerRow as unknown as AgentJournalStatusItem
       renderStatus(row, null, false, false, 'Grok')
       expect(screen.getByText('Future host guidance')).toBeInTheDocument()
     }

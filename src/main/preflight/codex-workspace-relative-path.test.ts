@@ -7,7 +7,8 @@ import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { runProcess } from '@orca/process-host'
 import { createCodexStructuredLaunchResolver } from '../codex/codex-structured-launch-resolution'
-import { configuredCodexInvocationSources } from '../codex/configured-codex-invocation'
+import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
+import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { createStructuredAgentEnvironmentResolvers } from '../runtime/structured-agent-shell-environment'
 import { identityFor } from '../codex/codex-structured-session-adapter-fixture'
 import { readCodexCliInstallation } from './codex-cli-installation'
@@ -51,7 +52,11 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
         { mode: 0o755 }
       )
       const settings = { agentDefaultEnv: { codex: { PATH: entry } } }
-      const sources = configuredCodexInvocationSources(() => settings)
+      const sources = {
+        resolveCommand: (options?: { pathEnv?: string | null; homePath?: string }) =>
+          resolveStructuredAgentCommand('codex', settings, options),
+        resolveLaunchEnvOverlay: () => resolveTuiAgentLaunchEnv('codex', settings.agentDefaultEnv)
+      }
       const environment = createStructuredAgentEnvironmentResolvers(sources)
       const record: AgentSessionRecord = {
         ...agentSessionRecordFixture(),

@@ -4,12 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import {
-  agentJournalItemKey,
-  agentJournalSubmissionKey
-} from '../../../../shared/agent-session-journal-item-key'
-import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/structured-agent-session-start-failure-row-key'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
 import {
   structuredAgentSessionDeliveryNotices,
   structuredAgentSessionStartFailureFacts
@@ -87,65 +82,6 @@ it('keeps one auth explanation while an unechoed message still reads as unsent',
   })
   expect([...notices.values()].map((notice) => notice.text)).toEqual(['Your message was not sent.'])
 })
-
-it.each(['launch', 'history', 'send'] as const)(
-  'leaves a missing Codex explanation to its existing %s refusal',
-  (surface) => {
-    const refusal = {
-      kind: 'refused',
-      code: 'agent_session_operation_invalid',
-      details: {
-        reason: 'cliMissing'
-      }
-    } as const
-    const row: AgentJournalRenderItem = {
-      itemId: agentJournalItemKey(structuredAgentSessionStartFailureRowIdentity('generation-1')),
-      revision: 1,
-      sequence: 1,
-      observedAt: 1,
-      body: {
-        kind: 'status',
-        tone: 'error',
-        ...agentSessionFailureWords(
-          { kind: 'cliMissing', refusal },
-          { agentName: 'Codex', surface: 'row' }
-        )
-      }
-    }
-    const rejection: AgentSessionFailureFact = { kind: 'cliMissing', refusal }
-    const sentKey = agentJournalSubmissionKey('sent')
-    const sentRow: AgentJournalRenderItem = {
-      itemId: sentKey,
-      revision: 1,
-      sequence: 1,
-      observedAt: 1,
-      body: { kind: 'message', role: 'user', blocks: [] }
-    }
-    const { result } = renderHook(() =>
-      useNativeChatAvailabilityNotice({
-        agent: 'codex',
-        agentLabel: 'Codex',
-        unavailable: { reason: 'cliMissing' },
-        launchFailure: surface === 'launch' ? refusal : null,
-        journalItems: surface === 'history' ? [row] : surface === 'send' ? [sentRow] : [],
-        ...(surface === 'send'
-          ? {
-              submissions: [
-                {
-                  clientMessageId: 'sent',
-                  submittedAt: 1,
-                  dispatchState: 'rejected' as const,
-                  rejection
-                }
-              ],
-              deliveryNotices: new Map([[sentKey, { text: 'line' }]])
-            }
-          : {})
-      })
-    )
-    expect(result.current).toBeNull()
-  }
-)
 
 // A signed-out Pi turns the send away before any turn: that send's own line says it.
 it("steps aside while the newest send's own line says the notice's reason", () => {

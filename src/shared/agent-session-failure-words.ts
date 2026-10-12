@@ -20,6 +20,7 @@ import {
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
 import { cliMissingSentence, notSignedInSentence } from './agent-session-availability-sentences'
 import {
+  codexInstallationFailureWords,
   sayAgentSessionFailureEnglish,
   type AgentSessionFailureCopyId,
   type AgentSessionFailureCopyValues,
@@ -29,7 +30,6 @@ import type { AgentSessionWireRefusalCode } from './agent-session-wire-refusals'
 import { providerRetryWords, withRetryCause } from './agent-session-provider-retry-words'
 import { commandRefusedByReason } from './agent-session-command-refusal-words'
 import { joinSentences } from './sentence-joining'
-import { codexInstallationFailureWords } from './codex-installation-failure-words'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_CODEX_QUEUE_FULL,

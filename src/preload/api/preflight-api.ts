@@ -1,8 +1,4 @@
 import type { ZCodeInteractiveCapability } from '../../shared/zcode-missing-tui'
-import type {
-  CodexMaintenanceParams,
-  CodexMaintenanceState
-} from '../../shared/codex-cli-maintenance'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type {
   PathSource,
@@ -49,7 +45,6 @@ export type PreflightRuntimeContext = {
 }
 
 export type PreflightApi = {
-  codexMaintenance: (args: CodexMaintenanceParams) => Promise<CodexMaintenanceState>
   check: (args?: PreflightRuntimeContext & { force?: boolean }) => Promise<PreflightStatus>
   detectAgents: (args?: PreflightRuntimeContext) => Promise<string[]>
   /** Whether the installed `zcode` can open a session; cached in main per run. */

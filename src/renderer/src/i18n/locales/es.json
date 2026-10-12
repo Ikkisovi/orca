@@ -19567,15 +19567,5 @@
   },
   "projectField": {
     "updateFailed": "No se pudo actualizar el campo del proyecto"
-  },
-  "codex": {
-    "maintenance": {
-      "installing": "Instalando…",
-      "install": "Instalar Codex",
-      "exitCode": "El comando terminó con el código {{code}}",
-      "logTitle": "Registro de configuración de Codex",
-      "copyLog": "Copiar registro",
-      "installFailed": "No se pudo instalar Codex. Vuelve a intentarlo."
-    }
   }
 }

@@ -1,14 +1,8 @@
 import { ipcRenderer } from 'electron'
-import type {
-  CodexMaintenanceParams,
-  CodexMaintenanceState
-} from '../../shared/codex-cli-maintenance'
 import type { PreflightRuntimeContext, PreloadApi, RefreshAgentsResult } from '../api-types'
 import type { ZCodeInteractiveCapability } from '../../shared/zcode-missing-tui'
 
 export const preflightApi = {
-  codexMaintenance: (args: CodexMaintenanceParams): Promise<CodexMaintenanceState> =>
-    ipcRenderer.invoke('preflight:codexMaintenance', args),
   check: (args?: {
     force?: boolean
   }): Promise<{

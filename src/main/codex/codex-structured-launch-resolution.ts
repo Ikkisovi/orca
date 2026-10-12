@@ -6,8 +6,8 @@
 // must name the thread this session actually proved — never one a caller asks
 // for, which is how a resume becomes a fork wearing a resume's name.
 
-import { structuredSessionCliEnvironment } from '../runtime/structured-session-child-identity-env'
-import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
+import { structuredSessionChildIdentityEnv } from '../runtime/structured-session-child-identity-env'
+import { requireSupportedCodexCli } from './codex-cli-installation-error'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
@@ -20,7 +20,6 @@ import type { CodexStructuredPermissionPolicy } from './codex-structured-permiss
 import { resolvePinnedCodexRolloutProof } from './codex-pinned-rollout-proof'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
-import { requireSupportedCodexCli } from './codex-cli-installation-error'
 import type { PrepareNativeChatVisuals } from '../native-chat/native-chat-visuals-delivery'
 
 export type CodexStructuredLaunchResolverDeps = {
@@ -44,7 +43,7 @@ export type CodexStructuredLaunchResolverDeps = {
 
 export type CodexStructuredInvocation = {
   command: string
-  environment: Record<string, string>
+  environment: NodeJS.ProcessEnv | undefined
 }
 
 /**
@@ -64,12 +63,7 @@ export async function resolveCodexStructuredInvocation(
     pathEnv,
     ...(homePath ? { homePath } : {})
   })
-  return {
-    command,
-    environment: structuredSessionCliEnvironment(
-      withCliRuntimeOnPath(command, { ...process.env, ...environment })
-    )
-  }
+  return { command, environment }
 }
 
 export function createCodexStructuredLaunchResolver(
@@ -99,11 +93,22 @@ export function createCodexStructuredLaunchResolver(
     }
     const { command, environment } = await resolveCodexStructuredInvocation(deps)
     const args = codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
+    const env = Object.fromEntries(
+      Object.entries(environment ?? {}).filter(
+        (pair): pair is [string, string] => pair[1] !== undefined
+      )
+    )
     const cwd = await resolveAgentSessionLaunchDirectory(deps, record)
     await (deps.requireSupportedCli ?? requireSupportedCodexCli)({
       program: command,
       cwd,
-      env: { ...process.env, ...environment, CODEX_HOME: accountHome.path }
+      env: {
+        ...process.env,
+        ...structuredSessionChildIdentityEnv(identity.sessionId, {
+          ...env,
+          CODEX_HOME: accountHome.path
+        })
+      }
     })
     const permissionPolicy = deps.resolvePermissionPolicy?.()
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
@@ -117,7 +122,7 @@ export function createCodexStructuredLaunchResolver(
       args: [...args, 'app-server'],
       cwd,
       codexHome: accountHome.path,
-      env: environment,
+      ...(environment ? { env } : {}),
       // An empty chain is a session that has never proved a thread, so it
       // starts one; anything else resumes the last link this session proved.
       resumeThreadId,

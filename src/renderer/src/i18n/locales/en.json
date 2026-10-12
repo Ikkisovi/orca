@@ -19724,16 +19724,6 @@
       "updateRuntimeSafely": "Update the remote runtime to safely change workspace links"
     }
   },
-  "codex": {
-    "maintenance": {
-      "installing": "Installing…",
-      "install": "Install Codex",
-      "exitCode": "Command exited with code {{code}}",
-      "logTitle": "Codex setup log",
-      "copyLog": "Copy log",
-      "installFailed": "Codex could not be installed. Try again."
-    }
-  },
   "tabHoverCard": {
     "browser": "Browser",
     "editor": "Editor",

@@ -54,7 +54,6 @@ import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-
 import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import {
-  assertScriptedCodexInstallation,
   STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
   type StructuredAgentAdapterContext
 } from './structured-agent-runtime-registrations'
@@ -115,8 +114,7 @@ export type StructuredAgentSessionRuntimeDeps = {
   }
   /** Provider transports are overridden only to drive the runtime against scripted children. */
   openCodexConnection?: CodexStructuredSessionAdapterDeps['openConnection']
-  /** The Codex a scripted transport stands for; required with it, since the default check runs
-   *  the binary the real transport would spawn. */
+  /** Scripted transports must also replace the real host's version probe. */
   readCodexInstallation?: typeof readCodexCliInstallation
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
@@ -264,7 +262,6 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   if (typeof deps.resolveLaunchArgs !== 'function') {
     throw new Error(STRUCTURED_AGENT_LAUNCH_ARGS_REQUIRED)
   }
-  assertScriptedCodexInstallation(deps)
   const declared: Partial<StructuredAgentSessionLogger> | undefined = deps.logger
   if (typeof declared?.warn !== 'function' || typeof declared.error !== 'function') {
     throw new Error(STRUCTURED_AGENT_SESSION_LOGGER_REQUIRED)

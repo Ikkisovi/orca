@@ -139,16 +139,6 @@ function nativeChatVisualsFor(deps: StructuredAgentSessionRuntimeDeps): {
     : {}
 }
 
-export const SCRIPTED_CODEX_INSTALLATION_REQUIRED =
-  'a scripted Codex transport requires readCodexInstallation'
-
-/** Without it the version check would run whatever real codex is on this machine's PATH. */
-export function assertScriptedCodexInstallation(deps: StructuredAgentSessionRuntimeDeps): void {
-  if (deps.openCodexConnection && !deps.readCodexInstallation) {
-    throw new Error(SCRIPTED_CODEX_INSTALLATION_REQUIRED)
-  }
-}
-
 function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps, store, followUps, host } = context
   const { readCodexInstallation } = deps
