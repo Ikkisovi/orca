@@ -16,16 +16,32 @@ function dispatcher() {
   return { records, frames, onProtocolFailure, writeResponse }
 }
 
+function oversized(prefix: string) {
+  return { kind: 'line-too-long' as const, maxLineBytes: MAX, observedBytes: MAX + 1, prefix }
+}
+
+function pendingCall(
+  records: ReturnType<typeof createCodexAppServerRecordDispatcher>,
+  id: number,
+  method: string
+) {
+  const waiter = {
+    method,
+    resolve: vi.fn(),
+    reject: vi.fn(),
+    timer: setTimeout(() => undefined, 0)
+  }
+  records.addPending(id, waiter)
+  return waiter
+}
+
 describe('createCodexAppServerRecordDispatcher oversized records', () => {
   it('skips an oversized notification with a sentence the chat row can show', () => {
     const { records, frames, onProtocolFailure } = dispatcher()
 
-    records.rejectOversized({
-      kind: 'line-too-long',
-      maxLineBytes: MAX,
-      observedBytes: MAX + 1,
-      prefix: '{"method":"item/completed","params":{"item":{"aggregatedOutput":"xxxx'
-    })
+    records.rejectOversized(
+      oversized('{"method":"item/completed","params":{"item":{"aggregatedOutput":"xxxx')
+    )
 
     expect(frames).toEqual([
       {
@@ -39,24 +55,64 @@ describe('createCodexAppServerRecordDispatcher oversized records', () => {
     expect(onProtocolFailure).not.toHaveBeenCalled()
   })
 
-  it('fails only the call an oversized reply belonged to', async () => {
-    const { records, onProtocolFailure } = dispatcher()
-    const reject = vi.fn()
-    records.addPending(7, {
-      method: 'thread/turns/list',
-      resolve: vi.fn(),
-      reject,
-      timer: setTimeout(() => undefined, 60_000)
-    })
+  it('fails only the call an oversized reply belonged to, without a chat row', () => {
+    const { records, frames, onProtocolFailure } = dispatcher()
+    const owner = pendingCall(records, 7, 'thread/turns/list')
+    const other = pendingCall(records, 8, 'turn/start')
 
-    records.rejectOversized({
-      kind: 'line-too-long',
-      maxLineBytes: MAX,
-      observedBytes: MAX + 1,
-      prefix: '{"id":7,"result":{"data":"xxxx'
-    })
+    records.rejectOversized(oversized('{"id":7,"result":{"data":"xxxx'))
 
-    expect(reject).toHaveBeenCalledWith(expect.any(CodexAppServerFrameSizeError))
+    expect(owner.reject).toHaveBeenCalledWith(expect.any(CodexAppServerFrameSizeError))
+    expect(other.reject).not.toHaveBeenCalled()
+    expect(frames).toEqual([])
     expect(onProtocolFailure).not.toHaveBeenCalled()
+  })
+
+  it('drops an oversized late reply to a timed-out call like any late reply', () => {
+    const { records, frames, onProtocolFailure } = dispatcher()
+    pendingCall(records, 7, 'thread/turns/list')
+    const other = pendingCall(records, 8, 'turn/start')
+    records.timeOutPending(7)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    records.rejectOversized(oversized('{"id":7,"result":{"data":"xxxx'))
+
+    expect(warn).toHaveBeenCalledWith(
+      '[codex-app-server] late reply to thread/turns/list after timeout (id 7)'
+    )
+    warn.mockRestore()
+    expect(other.reject).not.toHaveBeenCalled()
+    expect(frames).toEqual([])
+    expect(onProtocolFailure).not.toHaveBeenCalled()
+  })
+
+  it('keeps a frame the chat never shows silent when it is oversized', () => {
+    const { records, frames } = dispatcher()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    records.rejectOversized(oversized('{"method":"turn/diff/updated","params":{"diff":"xxxx'))
+
+    warn.mockRestore()
+    expect(frames).toEqual([])
+  })
+
+  it('declines an oversized server request and says so', () => {
+    const { records, frames, writeResponse } = dispatcher()
+
+    records.rejectOversized(
+      oversized('{"id":"req-1","method":"item/tool/requestUserInput","params":{"q":"xx')
+    )
+
+    expect(writeResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'req-1', error: expect.objectContaining({ code: -32001 }) })
+    )
+    expect(frames).toEqual([
+      {
+        kind: 'frame:oversized-request',
+        payload: expect.objectContaining({
+          message: 'Codex sent a request over 64 MB, so Orca declined it.'
+        })
+      }
+    ])
   })
 })

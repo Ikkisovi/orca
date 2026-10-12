@@ -18,6 +18,7 @@ import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexSessionJournalTranslator } from './codex-structured-session-journal'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
+import { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-error'
 import {
   codexProviderHandleLink,
   codexSpawnedProcessIdentity
@@ -188,14 +189,23 @@ export async function acquireCodexStructuredSession(input: {
       ...(deps.logger ? { logger: deps.logger } : {})
     })
     acquisitions.assertCurrent(sessionId, attempt)
-    const opened = await openCodexThread(connection, threadLaunch, deps.requestTimeoutMs)
+    const historyTooLarge = (): AgentSessionAcquisitionRefusal =>
+      AgentSessionAcquisitionRefusal.historyTooLarge(
+        'Codex thread history exceeds the bounded restore queue; history was not partially imported.'
+      )
+    const opened = await openCodexThread(connection, threadLaunch, deps.requestTimeoutMs).catch(
+      (error: unknown) => {
+        // A Codex without excludeTurns returns the whole history in one reply, past the record cap.
+        throw error instanceof CodexAppServerFrameSizeError && error.method === 'thread/resume'
+          ? historyTooLarge()
+          : error
+      }
+    )
     acquisitions.assertCurrent(sessionId, attempt)
     primaryThreadId = opened.threadId
     const restoreAdmission = translator?.restoreThread(opened.threadId, opened.thread ?? {})
     if (restoreAdmission && !restoreAdmission.accepted) {
-      throw AgentSessionAcquisitionRefusal.historyTooLarge(
-        'Codex thread history exceeds the bounded restore queue; history was not partially imported.'
-      )
+      throw historyTooLarge()
     }
     const process = await spawnIdentity.read(connection.pid)
     acquisitions.assertCurrent(sessionId, attempt)

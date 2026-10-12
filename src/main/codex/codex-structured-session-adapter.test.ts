@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  CodexAppServerFrameSizeError,
   CodexAppServerRequestError,
   type openCodexAppServerConnection
 } from './codex-app-server-connection'
@@ -239,6 +240,19 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       observedAt: 1_700_000_000_500
     })
     expect(codex.connections[0].closeCount).toBe(0)
+  })
+
+  it('refuses as history too large when a resume reply is over the record cap', async () => {
+    const codex = fakeCodex({
+      'thread/resume': () => {
+        throw new CodexAppServerFrameSizeError('thread/resume', 70 * 2 ** 20, 64 * 2 ** 20)
+      }
+    })
+    const adapter = adapterFor(codex, { resumeThreadId: 'thread-proven' })
+
+    await expect(
+      adapter.acquire({ identity: identityFor('session-1'), fence: 9, spawnToken: 'spawn-9' })
+    ).rejects.toMatchObject({ reason: 'historyTooLarge' })
   })
 
   it('refuses a resume that lands on a different thread and reaps the child', async () => {

@@ -194,7 +194,7 @@ export async function runCodexAppServerSession<T>(
         rejected.observedBytes,
         rejected.maxLineBytes
       )
-      if (record.kind === 'response-unknown') {
+      if (record.kind === 'response-unknown' || record.kind === 'unknown') {
         failPending(error)
       } else if (record.kind === 'response') {
         pending.get(record.id)?.reject(error)

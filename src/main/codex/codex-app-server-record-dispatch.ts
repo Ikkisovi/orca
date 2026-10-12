@@ -8,6 +8,7 @@ import {
   isCodexMethodNotFoundError
 } from './codex-app-server-session'
 import { classifyJsonRpcPrefix } from '../../shared/json-rpc-record-prefix'
+import { classifyProviderFrame } from '../native-chat/agent-session-wire/provider-frame-disposition'
 
 const OVERSIZED_REQUEST_ERROR_CODE = -32001
 const MAX_REMEMBERED_TIMEOUTS = 64
@@ -59,16 +60,16 @@ export function createCodexAppServerRecordDispatcher(input: {
     pending.clear()
   }
 
-  const failPendingForOversizedUnknown = (
-    record: NdjsonRejectedRecord & { kind: 'line-too-long' }
-  ): void => {
-    for (const waiter of pending.values()) {
-      clearTimeout(waiter.timer)
-      waiter.reject(
-        new CodexAppServerFrameSizeError(waiter.method, record.observedBytes, record.maxLineBytes)
-      )
-    }
-    pending.clear()
+  /** Only the request that gave up could have interpreted this reply, and it already reported its own outcome. */
+  const reportUnclaimedReply = (id: number, error?: string): void => {
+    const timedOutMethod = timedOutMethods.get(id)
+    timedOutMethods.delete(id)
+    console.warn(
+      timedOutMethod
+        ? `[codex-app-server] late reply to ${timedOutMethod} after timeout (id ${id})`
+        : `[codex-app-server] reply with no waiting request (id ${id})`,
+      ...(typeof error === 'string' ? [error] : [])
+    )
   }
 
   const dispatch = (message: Record<string, unknown>): void => {
@@ -92,17 +93,8 @@ export function createCodexAppServerRecordDispatcher(input: {
     }
     const waiter = pending.get(message.id)
     if (!waiter) {
-      // Transport diagnostics, not conversation: only the request that gave up could have
-      // interpreted this reply, and it already reported its own outcome.
-      const timedOutMethod = timedOutMethods.get(message.id)
-      timedOutMethods.delete(message.id)
       const error = isProviderRecord(message.error) ? message.error.message : undefined
-      console.warn(
-        timedOutMethod
-          ? `[codex-app-server] late reply to ${timedOutMethod} after timeout (id ${message.id})`
-          : `[codex-app-server] reply with no waiting request (id ${message.id})`,
-        ...(typeof error === 'string' ? [error] : [])
-      )
+      reportUnclaimedReply(message.id, typeof error === 'string' ? error : undefined)
       return
     }
     pending.delete(message.id)
@@ -129,9 +121,8 @@ export function createCodexAppServerRecordDispatcher(input: {
 
   const rejectOversized = (rejected: NdjsonRejectedRecord & { kind: 'line-too-long' }): void => {
     const classification = classifyJsonRpcPrefix(rejected.prefix)
+    const limitMb = megabytes(rejected.maxLineBytes)
     const payload = {
-      // The chat row's sentence; without it the row reads the bare `reason` code.
-      message: `Codex sent an update over ${megabytes(rejected.maxLineBytes)} MB, so Orca skipped it.`,
       reason: 'record-too-large',
       observedBytes: rejected.observedBytes,
       maxBytes: rejected.maxLineBytes,
@@ -141,27 +132,20 @@ export function createCodexAppServerRecordDispatcher(input: {
     }
     if (classification.kind === 'response') {
       const waiter = pending.get(classification.id)
-      if (waiter) {
-        pending.delete(classification.id)
-        clearTimeout(waiter.timer)
-        waiter.reject(
-          new CodexAppServerFrameSizeError(
-            waiter.method,
-            rejected.observedBytes,
-            rejected.maxLineBytes
-          )
-        )
-      } else {
-        input.handlers.onUnhandledFrame?.('frame:oversized-response', payload)
-        failPendingForOversizedUnknown(rejected)
-        input.onProtocolFailure(
-          new Error(
-            `codex app-server oversized response ${classification.id} had no pending request`
-          )
-        )
+      if (!waiter) {
+        reportUnclaimedReply(classification.id)
         return
       }
-      input.handlers.onUnhandledFrame?.('frame:oversized-response', payload)
+      pending.delete(classification.id)
+      clearTimeout(waiter.timer)
+      // The caller reports this failure itself; a chat row as well would say it twice.
+      waiter.reject(
+        new CodexAppServerFrameSizeError(
+          waiter.method,
+          rejected.observedBytes,
+          rejected.maxLineBytes
+        )
+      )
       return
     }
     if (classification.kind === 'server-request') {
@@ -172,11 +156,23 @@ export function createCodexAppServerRecordDispatcher(input: {
           message: `request exceeds ${rejected.maxLineBytes} byte limit`
         }
       })
-      input.handlers.onUnhandledFrame?.('frame:oversized-request', payload)
+      input.handlers.onUnhandledFrame?.('frame:oversized-request', {
+        message: `Codex sent a request over ${limitMb} MB, so Orca declined it.`,
+        ...payload
+      })
       return
     }
     if (classification.kind === 'notification') {
-      input.handlers.onUnhandledFrame?.('frame:oversized-notification', payload)
+      // A frame the chat never shows (turn diffs, deltas) stays silent when it is too big, too.
+      const shown = classifyProviderFrame('codex', `notification:${classification.method}`, null)
+      if (shown === 'timeline-substantive' || shown === 'error-surface') {
+        input.handlers.onUnhandledFrame?.('frame:oversized-notification', {
+          message: `Codex sent an update over ${limitMb} MB, so Orca skipped it.`,
+          ...payload
+        })
+      } else {
+        console.warn(`[codex-app-server] skipped ${classification.method} over ${limitMb} MB`)
+      }
       return
     }
     input.handlers.onUnhandledFrame?.('frame:oversized-unclassified', payload)
