@@ -209,9 +209,10 @@ export async function admitAgentLaunchOperation(
   try {
     return await admitRecordedLaunch(context, ids, fingerprint, now)
   } catch (error) {
-    // A window pane's click never waits on bookkeeping: with no ledger it runs unrecorded, and a
-    // replay after it settles is not answered from the ledger.
-    if (params.spawnTrigger !== 'window-pane') {
+    // A "+" click never waits on bookkeeping: with no ledger it runs unrecorded, and a replay after
+    // it settles is not answered from the ledger. TEMPORARY parity (follow-up 3): AI buttons
+    // (no `wslShellRule: 'window'`) are still refused, as before C2.
+    if (params.spawnTrigger !== 'window-pane' || params.wslShellRule !== 'window') {
       throw error
     }
     console.warn('[agent-launch] the ledger did not admit a window-pane launch', error)

@@ -232,11 +232,11 @@ describe('a launch the window pane starts', () => {
     })
   })
 
-  it('still starts when the ledger cannot admit it: the click never waits on bookkeeping', async () => {
+  it('still starts a "+" when the ledger cannot admit it: the click never waits on bookkeeping', async () => {
     setAgentLaunchRecordStore(null)
     const runtime = host()
 
-    const result = await launch(runtime)
+    const result = await launch(runtime, { wslShellRule: 'window' })
 
     expect(result.outcome).toEqual({ kind: 'pane', paneKey: PANE_KEY })
     expect((await planned(runtime)).plan).toMatchObject({ command: 'claude' })
@@ -244,6 +244,13 @@ describe('a launch the window pane starts', () => {
     await expect(
       launch(runtime, { spawnTrigger: undefined, operationId: `${Date.now()}-${'f'.repeat(32)}` })
     ).rejects.toThrow('agent_session_record_store_unavailable')
+  })
+
+  it("refuses an AI button's launch when the ledger cannot admit it, as before", async () => {
+    setAgentLaunchRecordStore(null)
+    const runtime = host()
+    await expect(launch(runtime)).rejects.toThrow('agent_session_record_store_unavailable')
+    expect(runtime.planPaneAgentTerminal).not.toHaveBeenCalled()
   })
 
   it('is refused from any caller but this desktop window', async () => {
