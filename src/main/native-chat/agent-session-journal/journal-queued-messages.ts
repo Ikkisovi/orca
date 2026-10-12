@@ -27,6 +27,7 @@ import {
   insertQueuedMessage,
   listQueuedMessages,
   queuedMessagesSettledByOp,
+  returnUnsentQueuedMessage,
   withdrawQueuedMessages,
   type QueuedMessageHoldReason,
   type QueuedMessageRow
@@ -151,6 +152,17 @@ export class JournalQueuedMessages {
     ).then(() => undefined)
   }
 
+  /** A card the host runs itself that could not run, returned with why (`returnUnsentQueuedMessage`). */
+  returnUnsent(
+    input: Omit<Parameters<typeof returnUnsentQueuedMessage>[1], 'sessionId' | 'now'>
+  ): Promise<boolean> {
+    const card = { ...input, sessionId: this.deps.sessionId, now: this.deps.now() }
+    return this.transact(
+      (db) => returnUnsentQueuedMessage(db, card),
+      (changed) => changed
+    )
+  }
+
   /** The queue's pauses in force, derived from the fold and the cards (`queued-message-pause.ts`). */
   pauses(): DerivedQueuePause[] {
     return this.derivePauses(this.list())
@@ -220,19 +232,21 @@ export class JournalQueuedMessages {
     )
   }
 
-  /** Withdraw commands with the clear's divider and receipt on the same connection. */
+  /** Withdraw commands with the clear's divider and receipt on the same connection; the ids withdrawn. */
   withdrawInTransaction(
     db: Database.Database,
     input: { messageIds: readonly string[]; settledByOp: string }
-  ): void {
+  ): string[] {
     if (this.deps.database().db !== db) {
       throw new AgentSessionJournalError('journal_closed', 'withdraw crossed database handles')
     }
-    this.changeRevision += withdrawQueuedMessages(db, {
+    const withdrawn = withdrawQueuedMessages(db, {
       ...input,
       sessionId: this.deps.sessionId,
       now: this.deps.now()
-    }).length
+    })
+    this.changeRevision += withdrawn.length
+    return withdrawn.map((row) => row.messageId)
   }
 
   /** One standalone draft-table transaction on the journal's queue; one that changed rows commits

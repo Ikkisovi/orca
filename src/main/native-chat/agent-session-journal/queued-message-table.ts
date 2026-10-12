@@ -224,6 +224,28 @@ export function withdrawQueuedMessages(
   return withdrawn
 }
 
+/** waiting ∪ returned → returned with why, with no hand-off: a card the host runs itself (a queued
+ *  /clear) that could not run. False when the card is no longer unsettled. */
+export function returnUnsentQueuedMessage(
+  db: Database.Database,
+  input: {
+    sessionId: string
+    messageId: string
+    reason: string | null
+    rejection: UnreadAgentSessionFailureFact
+    now: number
+  }
+): boolean {
+  const changed = db
+    .prepare(
+      `UPDATE queued_messages
+       SET state = 'returned', hold_reason = NULL, returned_reason = ?, returned_rejection = ?, settled_at = ?
+       WHERE session_id = ? AND message_id = ? AND state IN ('waiting', 'returned')`
+    )
+    .run(input.reason, JSON.stringify(input.rejection), input.now, input.sessionId, input.messageId)
+  return Number(changed.changes ?? 0) > 0
+}
+
 /**
  * dispatched → returned, or back to waiting (`rejectedDraftSettlement`),
  * matched on the draft's CURRENT hand-off (`consumed_as`), so a re-send refused
