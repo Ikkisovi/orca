@@ -41,6 +41,8 @@ export async function captureOriginalDeliveryRetirement(directory: string): Prom
     sessionId: 'session-a',
     observedCursor: { epoch: 'journal-a', sequence: 1 }
   })
+  // Why: the caller deletes the directory next; an unflushed write would recreate it.
+  await restarted.flushDismissals()
   if (!event) {
     throw new Error('read did not withdraw the prompt')
   }

@@ -53,9 +53,15 @@ function prompt(id: string, sequence: number): AgentJournalRenderItem {
     }
   }
 }
-function attentionPath(directory: string) {
+const controllers: RuntimeMobileNotificationController[] = []
+function storeController(directory: string): RuntimeMobileNotificationController {
   const controller = new RuntimeMobileNotificationController()
   controller.configureDismissalStore(directory)
+  controllers.push(controller)
+  return controller
+}
+function attentionPath(directory: string) {
+  const controller = storeController(directory)
   const events: MobileNotificationEvent[] = []
   controller.onDispatched((event) => events.push(event))
   let items: AgentJournalRenderItem[] = [
@@ -131,8 +137,9 @@ beforeEach(() => {
   installStructuredHostStub()
   vi.clearAllMocks()
 })
-afterEach(() => {
+afterEach(async () => {
   clearStructuredHostStub()
+  await Promise.all(controllers.splice(0).map((controller) => controller.flushDismissals()))
   rmSync(directory, { recursive: true, force: true })
 })
 
@@ -214,8 +221,7 @@ it('a restart sends the original delivery fence in the existing native gateway f
     throw new Error('prompt not delivered')
   }
   await h.controller.flushDismissals()
-  const restarted = new RuntimeMobileNotificationController()
-  restarted.configureDismissalStore(directory)
+  const restarted = storeController(directory)
   const gateway = createHarness({
     devices: [{ deviceId: 'phone', pushRegistration: registration() }]
   })
