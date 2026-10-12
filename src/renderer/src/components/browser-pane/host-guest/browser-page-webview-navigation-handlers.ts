@@ -1,6 +1,4 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
-import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../../shared/browser-annotation-viewport-bridge'
-import { parseBrowserAnnotationViewportReport } from '../../../../../shared/browser-annotation-viewport-report'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -8,10 +6,8 @@ import {
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 import { rememberLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
-import {
-  applyBrowserAnnotationViewportReport,
-  type BrowserOverlayViewport
-} from '../describe-page/browser-annotation-geometry'
+import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
+import { consumeBrowserAnnotationViewportMessage } from '../annotate/browser-annotation-viewport-message'
 import {
   getBrowserDisplayTitle,
   isChromiumErrorPage,
@@ -188,15 +184,11 @@ export function createBrowserPageWebviewNavigationHandlers({
   }
 
   const handleAnnotationViewportMessage = (event: { message?: string }): void => {
-    const message = typeof event.message === 'string' ? event.message : ''
-    const prefix = `${BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX}${annotationViewportBridgeTokenRef.current}:`
-    if (!message.startsWith(prefix)) {
-      return
-    }
-    const report = parseBrowserAnnotationViewportReport(message.slice(prefix.length))
-    if (report) {
-      setBrowserOverlayViewport((current) => applyBrowserAnnotationViewportReport(current, report))
-    }
+    consumeBrowserAnnotationViewportMessage(
+      event,
+      annotationViewportBridgeTokenRef.current,
+      setBrowserOverlayViewport
+    )
   }
 
   return {
