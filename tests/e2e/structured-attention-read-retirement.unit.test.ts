@@ -584,7 +584,7 @@ describe('Accepted structured history read retirement', () => {
         transport.dismiss.mock.calls.filter(([, , reads]) => Array.isArray(reads))
       ).toHaveLength(2)
     } finally {
-      await relay.flushDismissals()
+      await relay.closeDismissals()
       rmSync(relayDirectory, { recursive: true, force: true })
     }
   })

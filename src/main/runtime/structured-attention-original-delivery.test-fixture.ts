@@ -28,7 +28,7 @@ export async function captureOriginalDeliveryRetirement(directory: string): Prom
       cause: { kind: 'prompt', promptId: 'A' }
     }
   })
-  await original.flushDismissals()
+  await original.closeDismissals()
   const restarted = new RuntimeMobileNotificationController()
   restarted.configureDismissalStore(directory)
   let event: MobileNotificationDismissEvent | undefined
@@ -42,7 +42,7 @@ export async function captureOriginalDeliveryRetirement(directory: string): Prom
     observedCursor: { epoch: 'journal-a', sequence: 1 }
   })
   // Why: the caller deletes the directory next; an unflushed write would recreate it.
-  await restarted.flushDismissals()
+  await restarted.closeDismissals()
   if (!event) {
     throw new Error('read did not withdraw the prompt')
   }

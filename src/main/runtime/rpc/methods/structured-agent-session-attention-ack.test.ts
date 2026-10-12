@@ -21,7 +21,7 @@ beforeEach(() => {
 })
 afterEach(async () => {
   clearStructuredHostStub()
-  await hostController?.flushDismissals()
+  await hostController?.closeDismissals()
   hostController = undefined
   rmSync(directory, { recursive: true, force: true })
 })

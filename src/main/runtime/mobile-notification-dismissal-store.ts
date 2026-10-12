@@ -17,10 +17,15 @@ type RecordEntry = DeliveredNotificationRecord & { dismissedThrough: number; exp
 const LIMIT = 4096
 const RETENTION_MS = 7 * 86400_000
 
+function warnPersistFailed(error: unknown): void {
+  console.warn('[notifications] Could not persist dismissal recovery state', error)
+}
+
 export class MobileNotificationDismissalStore {
   private readonly path: string
   private entries: RecordEntry[] = []
   private unreadable = false
+  private closed = false
   // Why not the secure writer: this holds notification ids, not credentials, and its synchronous
   // Windows icacls launches froze every window on each notification (STA-9692).
   private readonly writer: AtomicSnapshotWriter
@@ -92,18 +97,26 @@ export class MobileNotificationDismissalStore {
     }
     next = next.slice(-LIMIT)
     this.entries = next
-    if (!this.unreadable) {
-      // Coalesced: a burst of records costs one write of the latest entries.
-      this.writer
-        .write(() => JSON.stringify(this.entries, null, 2))
-        .catch((error: unknown) => {
-          console.warn('[notifications] Could not persist dismissal recovery state', error)
-        })
+    if (this.unreadable) {
+      return
     }
+    const serialize = () => JSON.stringify(this.entries, null, 2)
+    if (this.closed) {
+      // Why sync: the process is exiting and would drop an async write.
+      try {
+        this.writer.writeSync(serialize)
+      } catch (error) {
+        warnPersistFailed(error)
+      }
+      return
+    }
+    // Coalesced: a burst of records costs one write of the latest entries.
+    this.writer.write(serialize).catch(warnPersistFailed)
   }
 
-  /** Resolves once every recorded change has been written or has failed to write. */
-  flush(): Promise<void> {
+  /** Committed exits only: later records save synchronously; resolves when the pending write settles. */
+  close(): Promise<void> {
+    this.closed = true
     return this.writer.waitForPendingWrite().catch(() => {})
   }
 

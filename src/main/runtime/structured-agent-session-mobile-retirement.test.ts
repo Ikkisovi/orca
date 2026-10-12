@@ -164,7 +164,7 @@ describe('host prompt delivery and retirement', () => {
           Number(promptAnnounced) + (outcome === 'failure' ? 1 : 0)
         )
       } finally {
-        await controller.flushDismissals()
+        await controller.closeDismissals()
         rmSync(directory, { recursive: true, force: true })
       }
     }

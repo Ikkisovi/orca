@@ -139,7 +139,7 @@ beforeEach(() => {
 })
 afterEach(async () => {
   clearStructuredHostStub()
-  await Promise.all(controllers.splice(0).map((controller) => controller.flushDismissals()))
+  await Promise.all(controllers.splice(0).map((controller) => controller.closeDismissals()))
   rmSync(directory, { recursive: true, force: true })
 })
 
@@ -220,7 +220,7 @@ it('a restart sends the original delivery fence in the existing native gateway f
   if (!original) {
     throw new Error('prompt not delivered')
   }
-  await h.controller.flushDismissals()
+  await h.controller.closeDismissals()
   const restarted = storeController(directory)
   const gateway = createHarness({
     devices: [{ deviceId: 'phone', pushRegistration: registration() }]

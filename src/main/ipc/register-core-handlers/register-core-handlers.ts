@@ -144,7 +144,11 @@ export function registerCoreHandlers(
   }
   registered = true
 
-  registerAppHandlers(store, { onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch })
+  registerAppHandlers(store, {
+    onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
+    // Why here, not onBeforeRelaunch: restart and profile switches quit through will-quit, which closes it.
+    onBeforeRelaunchExit: () => runtime.closeNotificationDismissals()
+  })
   registerCliHandlers()
   registerPreflightHandlers()
   registerUsageProviderHandlers({ claudeUsage, codexUsage, openCodeUsage, museUsage })

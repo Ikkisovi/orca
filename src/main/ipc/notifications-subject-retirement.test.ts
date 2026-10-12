@@ -232,7 +232,7 @@ describe('notifications:dismiss by acknowledged subject', () => {
       expect(dismissMobileNotification).toHaveBeenCalledTimes(1)
       expect(events.filter((event) => event.type === 'dismiss')).toHaveLength(2)
     } finally {
-      await controller.flushDismissals()
+      await controller.closeDismissals()
       rmSync(directory, { recursive: true, force: true })
     }
   })
@@ -289,7 +289,7 @@ describe('notifications:dismiss by acknowledged subject', () => {
         events.filter((event) => event.type === 'dismiss').map((event) => event.notificationId)
       ).toEqual(['agent-attention:click-A', 'agent-attention:click-B'])
     } finally {
-      await controller.flushDismissals()
+      await controller.closeDismissals()
       rmSync(directory, { recursive: true, force: true })
     }
   })
@@ -342,7 +342,7 @@ describe('notifications:dismiss by acknowledged subject', () => {
         events.filter((event) => event.type === 'dismiss').map((event) => event.notificationId)
       ).toEqual([key('prompt:A')])
     } finally {
-      await controller.flushDismissals()
+      await controller.closeDismissals()
       rmSync(directory, { recursive: true, force: true })
     }
   })

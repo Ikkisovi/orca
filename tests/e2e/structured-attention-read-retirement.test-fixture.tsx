@@ -346,6 +346,6 @@ afterEach(async () => {
   resetStructuredAgentSessionStatusFeedsForTests()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
-  await fixture.controller.flushDismissals()
+  await fixture.controller.closeDismissals()
   rmSync(fixture.directory, { recursive: true, force: true })
 })

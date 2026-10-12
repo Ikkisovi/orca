@@ -340,8 +340,8 @@ async function startOrcadRuntime(
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
 
-  // Runs after RPC stops; orcad has no desktop quit barrier to save pending dismissals.
-  registerCleanup(() => runtime.flushNotificationDismissals())
+  // Runs after RPC stops (cleanups run reversed); later records save synchronously until exit.
+  registerCleanup(() => runtime.closeNotificationDismissals())
   // A retry armed during recovery would otherwise write after the final profile flush.
   registerCleanup(() => runtime.stopLegacyWorkerTerminalRecovery())
 
