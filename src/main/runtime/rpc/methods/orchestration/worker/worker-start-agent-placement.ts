@@ -15,6 +15,7 @@
 
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import { agentLaunchSurfaceHandle } from '../../../../../../shared/agent-launch-intent'
 import { executeAgentLaunch } from '../../../../../agent-launch/agent-launch-executor'
 import type { AgentLaunchSurfaceFactory } from '../../../../../agent-launch/agent-launch-surface-factories'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -161,7 +162,7 @@ async function launchWorkerAgent(
   return {
     mode: launched.receipt,
     worktree: existing ?? requireWorktree(created?.worktree),
-    terminalHandle: launched.outcome.handle,
+    terminalHandle: agentLaunchSurfaceHandle(launched.outcome),
     structuredSession,
     setupReceipt: created?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
     ...(launched.warning ? { warning: launched.warning } : {})

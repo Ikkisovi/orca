@@ -39,14 +39,29 @@ export type AgentLaunchSurfaceFactory = {
     paneKey?: string
     /** The tab's first view, derived on the host by the window's own rule. */
     viewMode?: 'terminal' | 'chat'
-  }): Promise<{
-    handle: string
-    /** The pane this create minted; a factory whose runtime reports none omits it, never invents. */
-    paneKey?: string
-    warning?: string
-    /** Reported by the surface that built the typed line, never predicted by the executor. */
-    promptRodeLaunchCommand?: boolean
-  }>
+    /** A `startupPrompt` the window's rule may carry as a draft. */
+    startupPromptDelivery?: 'draft'
+    title?: string
+    extraAgentArgs?: string
+    requestKind?: 'new' | 'resume' | 'followup'
+    promptCarry?: 'window' | 'host'
+    wslShellRule?: 'window' | 'host'
+  }): Promise<
+    | {
+        handle: string
+        /** The pane this create minted; a factory whose runtime reports none omits it, never invents. */
+        paneKey?: string
+        warning?: string
+        /** Reported by the surface that built the typed line, never predicted by the executor. */
+        promptRodeLaunchCommand?: boolean
+      }
+    | {
+        /** Planned only: the caller's pane under `paneKey` starts it (`spawnTrigger: 'window-pane'`). */
+        handedToPane: true
+        paneKey: string
+        promptRodeLaunchCommand?: boolean
+      }
+  >
   /**
    * Commits the launch text as the session's first turn, answering with the transcript row's id.
    *

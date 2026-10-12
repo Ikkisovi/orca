@@ -98,6 +98,14 @@ export type AgentLaunchIntent = {
   /** The caller-minted id of the chat session a structured launch creates. Not a route input;
    *  refused when that session already exists. */
   sessionId?: string
+  /** `agent.launch`'s terminal inputs, as its params describe them. */
+  spawnTrigger?: 'window-pane' | 'host'
+  title?: string
+  extraAgentArgs?: string
+  requestKind?: 'new' | 'resume' | 'followup'
+  terminalOnly?: true
+  promptCarry?: 'window' | 'host'
+  wslShellRule?: 'window' | 'host'
 }
 
 /**
@@ -147,7 +155,13 @@ export type AgentLaunchOutcome =
        * or when the runtime could not report the pane it created.
        */
       paneKey?: string
+      /** The PTY a caller's own pane started, as its spawn committed it. */
+      ptyId?: string
+      incarnationId?: string
     }
+  /** Handed to the caller's own pane (`spawnTrigger: 'window-pane'`), which starts the terminal
+   *  from the host's plan; no handle exists yet. Only that caller ever receives it. */
+  | { kind: 'pane'; paneKey: string }
 /**
  * What became of the launch text.
  *
@@ -292,6 +306,14 @@ function isAgentLaunchPromptReceipt(value: unknown): value is AgentLaunchPromptR
         value.outcome === 'unconfirmed'
 }
 
+/** The handle of a surface the host made; only a window pane's own launch has none yet. */
+export function agentLaunchSurfaceHandle(outcome: AgentLaunchOutcome): string {
+  if (outcome.kind === 'pane') {
+    throw new Error('agent_launch_handed_to_pane')
+  }
+  return outcome.handle
+}
+
 function isAgentLaunchOutcome(value: unknown): value is AgentLaunchOutcome {
   if (typeof value !== 'object' || value === null) {
     return false
@@ -303,6 +325,9 @@ function isAgentLaunchOutcome(value: unknown): value is AgentLaunchOutcome {
     sessionId?: unknown
     paneKey?: unknown
     tabId?: unknown
+  }
+  if (outcome.kind === 'pane') {
+    return typeof outcome.paneKey === 'string'
   }
   if (typeof outcome.handle !== 'string' || outcome.handle.length === 0) {
     return false

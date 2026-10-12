@@ -169,9 +169,13 @@ describe('agent launch caller prompt transport', () => {
       const ridesArgv = id === 'quick-command'
       expect(result?.pasteDraftAfterLaunch).toBe(!ridesArgv)
       expect(commandCarries(PROMPT)).toBe(ridesArgv)
-      // The host is never handed the text: the window pastes it, as main does.
+      // The host plans only the text the command carries; the window pastes the rest, as main does.
       for (const [, , params] of callRuntimeRpc.mock.calls) {
-        expect(params).not.toHaveProperty('prompt')
+        if (ridesArgv) {
+          expect(params).toMatchObject({ promptCarry: 'window', prompt: { text: PROMPT } })
+        } else {
+          expect(params).not.toHaveProperty('prompt')
+        }
       }
     }
   )

@@ -1,13 +1,14 @@
 import { useAppStore } from '@/store'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
+import { planLaunchAgentStartupPrompt } from '../../../shared/launch-agent-startup-prompt-plan'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { pasteAgentLaunchPromptOnceReady } from '@/lib/launch-agent-tab-prompt-paste'
 import {
   launchNewTabPromptThroughHost,
-  newTabPromptLaunchesThroughHost
+  newTabPromptLaunchesThroughHost,
+  startNewTabPaneLaunch
 } from '@/lib/launch-agent-new-tab-host-route'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
@@ -238,7 +239,11 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   if (beforeSurfaceOpen?.({ kind: 'local-terminal' }) === false) {
     return null
   }
+  // Seam (F1): only a pane that spawns on this machine starts from the host's plan; a relay-era SSH
+  // row's pane waits for its host's conversion, as every launch into it did.
+  const startsFromHostPlan = !executionContext.worktreeSshConnectionId
   if (
+    startsFromHostPlan &&
     pasteDraftAfterLaunch !== null &&
     newTabPromptLaunchesThroughHost({ promptDelivery, pastesPrompt: true })
   ) {
@@ -267,6 +272,20 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   }
   // Why: queue startup BEFORE TerminalPane mounts — it snapshots pendingStartupByTabId in useState on first render.
   const tab = store.createTab(worktreeId, groupId, undefined, {
+    // The host plans the command and this tab's pane runs it; the startup queued below is the
+    // pane's own bookkeeping.
+    ...(startsFromHostPlan
+      ? startNewTabPaneLaunch({
+          agent,
+          worktreeId,
+          prompt: trimmedPrompt,
+          ...(agentArgs !== undefined ? { agentArgs } : {}),
+          ...(initialCwd?.trim() ? { cwd: initialCwd } : {}),
+          launchSource: launchSource ?? 'tab_bar_quick_launch',
+          carriesPrompt: hasPrompt && pasteDraftAfterLaunch === null,
+          promptDelivery
+        })
+      : {}),
     launchAgent: agent,
     quickCommandLabel,
     ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),

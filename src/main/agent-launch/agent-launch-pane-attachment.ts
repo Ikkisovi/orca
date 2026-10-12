@@ -12,20 +12,36 @@
 import type { AgentLaunchPaneVerdict } from '../../shared/agent-launch-pane-verdict'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
+import type { TerminalCreateOptions } from '../runtime/runtime-terminal-contracts'
 
 const PROCEED: AgentLaunchPaneVerdict = { kind: 'proceed' }
 
 /** A terminal pane a launch laid out before its process existed. */
 export type AgentLaunchPane = { worktreeId: string; paneKey: string }
 
+/** The host's plan for an agent its pane starts itself (`spawnTrigger: 'window-pane'`); the pane's
+ *  spawn reports how it went, which settles the launch. */
+export type AgentLaunchPanePlan = {
+  plan: TerminalCreateOptions
+  committed(spawned: { id: string; incarnationId?: string }): void
+  failed(error: unknown): void
+}
+
+/** What the pane's spawn does: the verdict, or start the planned agent. */
+export type AgentLaunchPaneSpawnVerdict =
+  | AgentLaunchPaneVerdict
+  | { kind: 'launch'; launch: AgentLaunchPanePlan }
+
 type RunningLaunch = {
   pane: AgentLaunchPane
-  /** The launch's agent holds the pane (`proceed`), or the launch is over: whichever comes first. */
-  settled: Promise<AgentLaunchPaneVerdict>
+  /** The launch's agent holds the pane (`proceed`), its plan is ready for the pane, or the launch
+   *  is over: whichever comes first. */
+  settled: Promise<AgentLaunchPaneSpawnVerdict>
   /** What the launch left for the pane once over, if no process holds it. */
   finished: Promise<AgentLaunchPaneVerdict>
   /** The user closed the launch's tab or pane while it ran; set by main's commit of that close. */
   closedByUser: boolean
+  onClosedByUser?: () => void
 }
 
 const runningLaunchesByPane = new Map<string, RunningLaunch>()
@@ -37,6 +53,9 @@ function paneKeyOf(pane: AgentLaunchPane): string {
 export type RunningAgentLaunchPane = {
   /** The launch's agent runs in the pane: a waiting spawn attaches now, not once the prompt lands. */
   agentBound(): void
+  /** The pane starts the agent itself: its spawn runs this plan. `onClosedByUser` runs if the user
+   *  closes the pane before it does. */
+  planReady(launch: AgentLaunchPanePlan, onClosedByUser: () => void): void
   /** The launch is over. `verdict` is what an unspawned pane does: `withdrawn` when the host takes
    *  the tab back, `not-started` when the launch failed, else `proceed`. */
   finish(verdict: AgentLaunchPaneVerdict): void
@@ -48,7 +67,7 @@ export type RunningAgentLaunchPane = {
 export function trackRunningAgentLaunchPane(pane: AgentLaunchPane): RunningAgentLaunchPane {
   const key = paneKeyOf(pane)
   let resolve!: (verdict: AgentLaunchPaneVerdict) => void
-  let settle!: (verdict: AgentLaunchPaneVerdict) => void
+  let settle!: (verdict: AgentLaunchPaneSpawnVerdict) => void
   const running: RunningLaunch = {
     pane,
     settled: new Promise((done) => {
@@ -63,6 +82,10 @@ export function trackRunningAgentLaunchPane(pane: AgentLaunchPane): RunningAgent
   let finished = false
   return {
     agentBound: () => settle(PROCEED),
+    planReady: (launch, onClosedByUser) => {
+      running.onClosedByUser = onClosedByUser
+      settle({ kind: 'launch', launch })
+    },
     finish: (verdict) => {
       if (finished) {
         return
@@ -95,6 +118,7 @@ export function markAgentLaunchesClosedByUser(
 ): void {
   for (const running of runningLaunchesIn(worktreeId, target)) {
     running.closedByUser = true
+    running.onClosedByUser?.()
   }
 }
 
@@ -112,7 +136,7 @@ export type IsAgentLaunchPaneLive = (paneKey: string) => boolean
 async function settleVerdict(
   pane: AgentLaunchPane,
   isPaneLive: IsAgentLaunchPaneLive
-): Promise<AgentLaunchPaneVerdict> {
+): Promise<AgentLaunchPaneSpawnVerdict> {
   let verdict = PROCEED
   // A retry can start another launch into the same pane once the first is over.
   for (
@@ -120,8 +144,9 @@ async function settleVerdict(
     running;
     running = runningLaunchesByPane.get(paneKeyOf(pane))
   ) {
-    if ((await running.settled).kind === 'withdrawn') {
-      return { kind: 'withdrawn' }
+    const settled = await running.settled
+    if (settled.kind === 'withdrawn' || settled.kind === 'launch') {
+      return settled
     }
     if (isPaneLive(pane.paneKey)) {
       return PROCEED
@@ -141,7 +166,7 @@ async function settleVerdict(
 export function resolveAgentLaunchPaneVerdict(
   pane: AgentLaunchPane,
   isPaneLive: IsAgentLaunchPaneLive
-): Promise<AgentLaunchPaneVerdict> | null {
+): Promise<AgentLaunchPaneSpawnVerdict> | null {
   return runningLaunchesByPane.has(paneKeyOf(pane)) ? settleVerdict(pane, isPaneLive) : null
 }
 

@@ -76,8 +76,11 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
       return earlyReserved
     }
     await executePtyIpcSpawn(ctx)
-    return await commitPtyIpcSpawn(ctx)
+    const committed = await commitPtyIpcSpawn(ctx)
+    ctx.paneLaunch?.committed(committed)
+    return committed
   } catch (err) {
+    ctx.paneLaunch?.failed(err)
     releaseAbandonedAgentTeamsLeader(ctx)
     if (ctx.preSpawnHiddenMarkId !== null) {
       ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)

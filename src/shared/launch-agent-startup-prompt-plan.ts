@@ -2,7 +2,7 @@ import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   type AgentStartupPlan
-} from '@/lib/tui-agent-startup'
+} from './tui-agent-startup'
 
 type StartupPlanBase = Omit<
   Parameters<typeof buildAgentStartupPlan>[0],

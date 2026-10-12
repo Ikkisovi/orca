@@ -5,6 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
+/** A local "+" tab is laid out for the host's plan: its ids are minted before the tab exists. */
+const PANE_LAUNCH_TAB = {
+  id: expect.any(String),
+  initialLeafId: expect.any(String),
+  agentLaunchPane: { leafId: expect.any(String) }
+}
+
 const mockCreateTab = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
 const mockSetActiveTabType = vi.fn()
@@ -129,6 +136,7 @@ describe('launchAgentInNewTab terminal tab activation', () => {
       undefined,
       undefined,
       {
+        ...PANE_LAUNCH_TAB,
         launchAgent: 'codex',
         quickCommandLabel: undefined
       }

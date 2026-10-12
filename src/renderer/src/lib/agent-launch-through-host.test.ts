@@ -34,9 +34,8 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
 
 createTabsSliceMockApi()
 
-const { launchAgentThroughHost } = await import('./agent-launch-through-host')
-const { agentLaunchPaneSpawnHold, releaseAgentLaunchPaneSpawn } =
-  await import('./agent-launch-pane-spawn-hold')
+const { launchAgentThroughHost, startPaneLaunch } = await import('./agent-launch-through-host')
+const { agentLaunchPaneSpawnHold } = await import('./agent-launch-pane-spawn-hold')
 const { agentLaunchPanePrompt } = await import('./agent-launch-pane-prompt')
 
 const WT = 'repo1::/tmp/feature'
@@ -61,9 +60,9 @@ function rpcError(code: string): RuntimeRpcCallError {
   })
 }
 
-function terminalResult(paneKey: string) {
+function paneResult(paneKey: string) {
   return {
-    outcome: { kind: 'terminal', handle: 'term_1', paneKey },
+    outcome: { kind: 'pane', paneKey },
     worktreeId: WT,
     receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'x' }
   }
@@ -90,12 +89,6 @@ function launch() {
     agentArgs: null,
     launchSource: 'source_control_recovery'
   })
-}
-
-/** What the host does first: it takes the pane, by asking this window to show the tab. */
-function hostTakesPane(tabId: string): void {
-  const tab = launchTab(tabId)!
-  releaseAgentLaunchPaneSpawn(tab.id, tab.agentLaunchPane!.leafId)
 }
 
 beforeEach(() => {
@@ -125,8 +118,7 @@ describe('a desktop launch through the host', () => {
       target: { kind: 'existing', worktree: `id:${WT}` },
       agentArgs: null,
       launchSource: 'source_control_recovery',
-      placement: { groupId: store.getState().activeGroupIdByWorktree[WT] },
-      presentation: 'focused',
+      spawnTrigger: 'window-pane',
       operationId: expect.stringMatching(/^\d+-[0-9a-f]{32}$/),
       paneKey: `${tabId}:${leafId}`
     })
@@ -142,60 +134,58 @@ describe('a desktop launch through the host', () => {
     expect(second.paneKey).not.toBe(first.paneKey)
   })
 
-  it('says the agent started only once the host answers, with its pane attached', async () => {
+  it('lets its pane start the planned agent once the host answers', async () => {
     const reply = deferred<unknown>()
     callRuntimeRpc.mockReturnValue(reply.promise)
     const { tabId, outcome } = launch()
-    const settled = vi.fn()
-    void outcome.then(settled)
-    hostTakesPane(tabId)
-    await Promise.resolve()
-    expect(settled).not.toHaveBeenCalled()
+    const leafId = launchTab(tabId)!.agentLaunchPane!.leafId
 
-    reply.resolve(terminalResult(lastPaneKey()))
+    reply.resolve(paneResult(lastPaneKey()))
 
     await expect(outcome).resolves.toEqual({ kind: 'started' })
     expect(launchTab(tabId)).toBeDefined()
+    expect(agentLaunchPaneSpawnHold(tabId, leafId)).toBeNull()
   })
 
-  it('takes its tab back on a refusal, before the pane ever spawns', async () => {
+  it.each([
+    'agent_session_operation_conflict',
+    'agent_session_operation_unknown',
+    'worktree_not_found'
+  ])('closes its tab on a %s refusal before the pane could spawn a shell', async (code) => {
     const reply = deferred<unknown>()
     callRuntimeRpc.mockReturnValue(reply.promise)
     const { tabId, outcome } = launch()
-
-    reply.reject(rpcError('agent_session_operation_conflict'))
-
-    await expect(outcome).resolves.toEqual({
-      kind: 'not-started',
-      code: 'agent_session_operation_conflict'
+    const leafId = launchTab(tabId)!.agentLaunchPane!.leafId
+    let heldAtClose: boolean | null = null
+    const unsubscribe = store.subscribe(() => {
+      if (heldAtClose === null && !launchTab(tabId)) {
+        heldAtClose = agentLaunchPaneSpawnHold(tabId, leafId) !== null
+      }
     })
+
+    reply.reject(rpcError(code))
+
+    await expect(outcome).resolves.toEqual({ kind: 'not-started', code })
+    unsubscribe()
     expect(launchTab(tabId)).toBeUndefined()
+    expect(heldAtClose).toBe(true)
   })
 
-  it('leaves a launch the host took to its pane, which says how it ended', async () => {
-    const reply = deferred<unknown>()
-    callRuntimeRpc.mockReturnValue(reply.promise)
-    const { tabId, outcome } = launch()
-    hostTakesPane(tabId)
-
-    reply.reject(rpcError('agent_session_operation_unknown'))
-
-    await expect(outcome).resolves.toEqual({ kind: 'pane-says' })
-    expect(launchTab(tabId)).toBeDefined()
-  })
-
-  it('never leaves a pane the host did not take, which would open as a shell', async () => {
-    const reply = deferred<unknown>()
-    callRuntimeRpc.mockReturnValue(reply.promise)
-    const { tabId, outcome } = launch()
-
-    reply.reject(rpcError('worktree_not_found'))
-
-    await expect(outcome).resolves.toEqual({
-      kind: 'not-started',
-      code: 'worktree_not_found'
+  it("sends a '+' tab's own prompt and WSL-shell rules with the prompt its command carries", () => {
+    callRuntimeRpc.mockReturnValue(new Promise(() => {}))
+    startPaneLaunch({
+      agent: 'codex',
+      worktreeId: WT,
+      prompt: 'fix it',
+      windowRules: true,
+      carriedPrompt: { text: 'fix it', delivery: 'draft' }
     })
-    expect(launchTab(tabId)).toBeUndefined()
+    expect(lastParams()).toMatchObject({
+      promptCarry: 'window',
+      wslShellRule: 'window',
+      prompt: { text: 'fix it', delivery: 'draft' },
+      spawnTrigger: 'window-pane'
+    })
   })
 
   // Why: the close was the user's own, as on the phone's "+".

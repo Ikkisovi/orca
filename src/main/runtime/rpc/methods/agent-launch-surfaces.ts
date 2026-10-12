@@ -37,6 +37,7 @@ import {
   type TerminalSpawnDispatch
 } from '../../../agent-launch/agent-launch-not-started'
 import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
+import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch-pane-already-live'
 import {
   agentLaunchMovesHostWindow,
   agentLaunchTabViewerRule,
@@ -56,7 +57,7 @@ export function agentLaunchSurfaceFactory(
   view: AgentLaunchView = { early: null, presentation: undefined }
 ): AgentLaunchSurfaceFactory {
   const movesHostWindow = agentLaunchMovesHostWindow(context)
-  const { early: earlyTab, presentation } = view
+  const { early: earlyTab, presentation, pane } = view
   return {
     createStructuredSession: async ({
       worktreeId,
@@ -131,16 +132,13 @@ export function agentLaunchSurfaceFactory(
       launchSource,
       paneKey,
       options,
-      viewMode
+      viewMode,
+      startupPromptDelivery,
+      ...terminalInputs
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options)
       let promptRodeLaunchCommand = false
-      const hasEarlyTab = earlyTab !== null
-      if (earlyTab?.closedByUser()) {
-        // The user closed its tab while it waited: nothing is spawned, and that is the answer.
-        terminalSpawn.rethrow(new AgentLaunchTabClosedError())
-      }
-      const created = context.runtime.createTerminal(`id:${worktreeId}`, {
+      const planned = {
         // The agent id is not a shell command — `cursor` is the desktop app, its CLI is
         // `cursor-agent` — so the runtime builds the configured launcher.
         startupAgent: agent,
@@ -149,6 +147,7 @@ export function agentLaunchSurfaceFactory(
         ...(startupPrompt
           ? {
               startupPrompt,
+              ...(startupPromptDelivery ? { startupPromptDelivery } : {}),
               onStartupPromptCarry: (carried: boolean) => {
                 promptRodeLaunchCommand = carried
               }
@@ -158,9 +157,27 @@ export function agentLaunchSurfaceFactory(
         ...(cwd ? { cwd } : {}),
         // The model the user picked outranks configured args here too, as it does on a chat.
         ...(launchPreferences ? { launchPreferences } : {}),
+        ...(launchSource ? { launchSource } : {}),
+        ...terminalInputs
+      }
+      if (pane && paneKey) {
+        // A live pane is attached to, never launched into.
+        if (context.runtime.hasLiveTerminalForPaneKey(paneKey)) {
+          throw new AgentLaunchPaneAlreadyLiveError()
+        }
+        const plan = await context.runtime.planPaneAgentTerminal(`id:${worktreeId}`, planned)
+        pane.handOff({ worktreeId, paneKey }, plan)
+        return { handedToPane: true, paneKey, promptRodeLaunchCommand }
+      }
+      const hasEarlyTab = earlyTab !== null
+      if (earlyTab?.closedByUser()) {
+        // The user closed its tab while it waited: nothing is spawned, and that is the answer.
+        terminalSpawn.rethrow(new AgentLaunchTabClosedError())
+      }
+      const created = context.runtime.createTerminal(`id:${worktreeId}`, {
+        ...planned,
         // A live reserved pane would be attached, not launched into, so the runtime refuses it.
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
-        ...(launchSource ? { launchSource } : {}),
         ...(viewMode ? { viewMode } : {}),
         ...(presentation && (!movesHostWindow || !hasEarlyTab || presentation === 'background')
           ? { presentation: movesHostWindow ? presentation : ('background' as const) }

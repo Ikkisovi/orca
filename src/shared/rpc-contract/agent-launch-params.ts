@@ -141,7 +141,25 @@ export const AgentLaunchFields = z.object({
     .transform((value): 'focused' | 'background' | undefined =>
       value === 'focused' || value === 'background' ? value : undefined
     )
-    .optional()
+    .optional(),
+  /** Read under `agent.launch.terminal-inputs.v1`, like every field below. `window-pane`: the
+   *  caller's pane under `paneKey` starts the PTY from the host's plan; absent is `host`. */
+  spawnTrigger: z.enum(['window-pane', 'host']).optional(),
+  /** Presentation and telemetry, so outside the fingerprint. An unknown request kind reads as `new`. */
+  title: z.string().optional(),
+  requestKind: z
+    .unknown()
+    .transform((value): 'new' | 'resume' | 'followup' | undefined =>
+      value === 'new' || value === 'resume' || value === 'followup' ? value : undefined
+    )
+    .optional(),
+  extraAgentArgs: z.string().optional(),
+  terminalOnly: z.literal(true).optional(),
+  /** TEMPORARY parity, `window` = the window tabs' own rule: the prompt on the command line with
+   *  POSIX staging (removed by prompt-at-start), and the runtime without the host's two legacy
+   *  WSL-shell terms (STA-10231, STA-10251). Absent is the host's rule. */
+  promptCarry: z.enum(['window', 'host']).optional(),
+  wslShellRule: z.enum(['window', 'host']).optional()
 })
 
 /** A caller-minted session id must be shaped like every id the host mints, so an id still names

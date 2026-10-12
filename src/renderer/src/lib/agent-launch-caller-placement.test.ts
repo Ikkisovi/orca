@@ -122,9 +122,11 @@ describe('agent launch caller placement and telemetry', () => {
       await launch(profile)
 
       if (launchesThroughHost(profile)) {
-        // The host starts the agent where the request names, so nothing waits on the tab.
-        expect(store.queueTabInitialCwd).not.toHaveBeenCalled()
+        // The tab's own pane starts the host's plan, so it is queued where the request names.
         expect(hostLaunchRequest(callRuntimeRpc)?.cwd).toBe(profile.args.initialCwd)
+        expect(store.queueTabInitialCwd.mock.calls.map(([, cwd]) => cwd)).toEqual(
+          profile.args.initialCwd ? [profile.args.initialCwd] : []
+        )
         return
       }
       if (profile.args.initialCwd) {

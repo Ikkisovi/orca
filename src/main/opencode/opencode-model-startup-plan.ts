@@ -5,6 +5,7 @@ import {
   type AgentStartupPlan
 } from '../../shared/tui-agent-startup'
 import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt-carry'
+import { planLaunchAgentStartupPrompt } from '../../shared/launch-agent-startup-prompt-plan'
 import { buildSleepingAgentLaunchConfig } from '../../shared/sleeping-agent-launch-config'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -167,15 +168,24 @@ export async function buildExecutionHostAgentStartupPlan(
   return plan
 }
 
-/** `buildExecutionHostAgentStartupPlan` for a caller that delivers an uncarried prompt itself. */
+/** `buildExecutionHostAgentStartupPlan` for a caller that delivers an uncarried prompt itself.
+ *  `promptCarry: 'window'` plans the prompt by the window tabs' own rule (TEMPORARY parity). */
 export async function planExecutionHostStartupWithPromptCandidate(
   options: StartupScope & {
     prompt: string
     host: { shellName?: string; provesAgentInFront: boolean }
+    promptCarry?: 'window' | 'host'
+    promptDelivery?: 'submit' | 'draft'
   }
 ): Promise<{ plan: AgentStartupPlan | null; promptCarried: boolean }> {
   const prepared = await prepareOpenCodeModelStartupInputs(options)
-  const offered = planStartupWithPromptCandidate(prepared.inputs, options.prompt, options.host)
+  if (prepared.launchConfig && options.promptDelivery === 'draft') {
+    refuseModel()
+  }
+  const offered =
+    options.promptCarry === 'window'
+      ? planWindowStartupPrompt(prepared.inputs, options.prompt.trim(), options.promptDelivery)
+      : planStartupWithPromptCandidate(prepared.inputs, options.prompt, options.host)
   if (offered.plan && prepared.launchConfig) {
     offered.plan.launchConfig = prepared.launchConfig
     offered.plan.sessionOptions = { ...options.inputs.sessionOptions }
@@ -192,5 +202,22 @@ export function assertOpenCodeModelLaunchPreferencesAbsent(
     Object.values(preferences ?? {}).some((value) => value !== undefined)
   ) {
     refuseModel()
+  }
+}
+
+function planWindowStartupPrompt(
+  inputs: AgentStartupPlanInputs,
+  prompt: string,
+  delivery: 'submit' | 'draft' | undefined
+): { plan: AgentStartupPlan | null; promptCarried: boolean } {
+  const planned = planLaunchAgentStartupPrompt({
+    base: inputs,
+    prompt,
+    promptDelivery: delivery === 'draft' ? 'draft' : 'auto-submit',
+    isFollowupPath: TUI_AGENT_CONFIG[inputs.agent].promptInjectionMode === 'stdin-after-start'
+  })
+  return {
+    plan: planned.startupPlan,
+    promptCarried: prompt.length > 0 && planned.pasteDraftAfterLaunch === null
   }
 }

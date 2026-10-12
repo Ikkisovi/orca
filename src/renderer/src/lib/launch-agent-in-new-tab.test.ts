@@ -3,6 +3,10 @@ import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-cap
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
+/** A local "+" tab is laid out for the host's plan: its ids are minted before the tab exists. */
+const ID = expect.any(String)
+const PANE_LAUNCH_TAB = { id: ID, initialLeafId: ID, agentLaunchPane: { leafId: ID } }
+
 const mockCreateTab = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
 const mockSetActiveTabType = vi.fn()
@@ -122,9 +126,15 @@ vi.mock('@/lib/agent-paste-draft', () => ({
 
 // Why: this file pins main's window launch and its paste, which chat-default and paired launches
 // still take; an AI button's host launch reuses that paste and is pinned in its own tests.
-vi.mock('@/lib/launch-agent-new-tab-host-route', () => ({
+vi.mock('@/lib/launch-agent-new-tab-host-route', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   newTabPromptLaunchesThroughHost: () => false,
   launchNewTabPromptThroughHost: vi.fn()
+}))
+// The host hands each local "+" launch to the pane this window laid out.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  callRuntimeRpc: vi.fn(async () => ({ outcome: { kind: 'pane' } }))
 }))
 
 vi.mock('@/lib/agent-ready-wait', () => ({
@@ -211,6 +221,7 @@ describe('launchAgentInNewTab', () => {
     launchAgentInNewTab({ requestId: 'request-1', agent: 'codex', worktreeId: 'wt-1' })
 
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      ...PANE_LAUNCH_TAB,
       launchAgent: 'codex'
     })
   })
@@ -237,7 +248,7 @@ describe('launchAgentInNewTab', () => {
       FLOATING_TERMINAL_WORKTREE_ID,
       undefined,
       undefined,
-      { launchAgent: 'codex' }
+      { ...PANE_LAUNCH_TAB, launchAgent: 'codex' }
     )
   })
 
@@ -260,6 +271,7 @@ describe('launchAgentInNewTab', () => {
     })
 
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      ...PANE_LAUNCH_TAB,
       launchAgent: 'codex',
       quickCommandLabel: undefined
     })
@@ -297,6 +309,7 @@ describe('launchAgentInNewTab', () => {
     })
 
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      ...PANE_LAUNCH_TAB,
       launchAgent: 'grok',
       quickCommandLabel: undefined
     })
@@ -393,6 +406,7 @@ describe('launchAgentInNewTab', () => {
     })
 
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      ...PANE_LAUNCH_TAB,
       launchAgent: 'codex',
       quickCommandLabel: 'Review'
     })

@@ -8,6 +8,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
+import { pickStoredFields } from '../../../../shared/workspace-layout/stored-record-fields'
 
 /**
  * A client addresses a workspace by selector, but the result's `worktreeId` is an id and every
@@ -54,7 +55,16 @@ async function agentLaunchIntent(
     ...(params.cwd ? { cwd: params.cwd } : {}),
     ...(params.launchSource ? { launchSource: params.launchSource } : {}),
     ...(paneKey ? { paneKey } : {}),
-    ...(params.sessionId ? { sessionId: params.sessionId } : {})
+    ...(params.sessionId ? { sessionId: params.sessionId } : {}),
+    ...pickStoredFields(params, [
+      'spawnTrigger',
+      'title',
+      'extraAgentArgs',
+      'requestKind',
+      'terminalOnly',
+      'promptCarry',
+      'wslShellRule'
+    ])
   }
 }
 

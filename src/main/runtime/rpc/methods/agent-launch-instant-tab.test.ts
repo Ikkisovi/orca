@@ -26,9 +26,9 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   markAgentLaunchesClosedByUser,
   resetAgentLaunchPanesForTests,
-  resolveAgentLaunchPaneVerdict
+  resolveAgentLaunchPaneVerdict,
+  type AgentLaunchPaneSpawnVerdict
 } from '../../../agent-launch/agent-launch-pane-attachment'
-import type { AgentLaunchPaneVerdict } from '../../../../shared/agent-launch-pane-verdict'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import type { RpcContext } from '../core'
@@ -186,7 +186,7 @@ function terminalOptions(runtime: Host): Record<string, unknown> {
 async function paneVerdict(
   runtime: Host,
   paneKey = PANE_KEY
-): Promise<AgentLaunchPaneVerdict | 'unowned'> {
+): Promise<AgentLaunchPaneSpawnVerdict | 'unowned'> {
   return (
     (await resolveAgentLaunchPaneVerdict({ worktreeId: 'wt-7', paneKey }, (key) =>
       runtime.hasLiveTerminalForPaneKey(key)
@@ -415,7 +415,7 @@ describe('the pane after its launch', () => {
     const operationId = nextOperationId()
     await replayLaunch(hostWithWindow({ terminalPaneKey: PANE_KEY }), { operationId }, CLI)
 
-    const verdicts: Promise<AgentLaunchPaneVerdict | 'unowned'>[] = []
+    const verdicts: Promise<AgentLaunchPaneSpawnVerdict | 'unowned'>[] = []
     const refused = coldRecord(hostWithWindow())
     const publish = refused.publishAgentLaunchTab.getMockImplementation()!
     refused.publishAgentLaunchTab.mockImplementation((request) => {

@@ -80,6 +80,17 @@ function parityMainSettings(overrides: Record<string, unknown> = {}): Record<str
   }
 }
 
+function fixtureRepo(path: string) {
+  return {
+    id: 'repo-1',
+    path,
+    displayName: 'repo',
+    badgeColor: '#000000',
+    addedAt: 0,
+    connectionId: null
+  }
+}
+
 function launchScope(workspace: LaunchWorkspace): TerminalWorkspaceLaunchScope {
   const connectionId = null
   if (workspace.kind === 'repo') {
@@ -87,14 +98,7 @@ function launchScope(workspace: LaunchWorkspace): TerminalWorkspaceLaunchScope {
       id: `repo-1::${workspace.path}`,
       path: workspace.path,
       connectionId,
-      repo: {
-        id: 'repo-1',
-        path: workspace.path,
-        displayName: 'repo',
-        badgeColor: '#000000',
-        addedAt: 0,
-        connectionId
-      },
+      repo: fixtureRepo(workspace.path),
       folderWorkspace: null
     }
   }
@@ -146,7 +150,9 @@ export function startParityLanes(
 ): ParityLanes {
   const settings = parityMainSettings(args.settings)
   const persistPtyBinding = vi.fn(async () => true)
-  const { repo, folderWorkspace } = launchScope(args.workspace)
+  const { repo: scopeRepo, folderWorkspace } = launchScope(args.workspace)
+  // A folder borrows the runtime of the one repo it contains, as the window reads it.
+  const repo = scopeRepo ?? (args.workspace.repoPath ? fixtureRepo(args.workspace.repoPath) : null)
   const store = {
     getSettings: () => settings,
     getProjects: () => [

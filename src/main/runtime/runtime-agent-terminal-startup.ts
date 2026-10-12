@@ -81,7 +81,12 @@ export async function resolveAgentTerminalCreateOptions(
     projectRuntime:
       opts.shellOverride && store
         ? plannedAgent || opts.launchRuntime
-          ? agentLaunchProjectRuntime(store, workspace, plannedAgent ?? opts.launchAgent)
+          ? agentLaunchProjectRuntime(
+              store,
+              workspace,
+              plannedAgent ?? opts.launchAgent,
+              opts.wslShellRule
+            )
           : resolveLocalProjectRuntimeForWorktreeId(store, workspace.id)
         : undefined,
     cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
@@ -109,7 +114,13 @@ export async function resolveAgentTerminalCreateOptions(
   const runtime =
     opts.launchRuntime ??
     (plannedAgent
-      ? resolveAgentLaunchRuntime(store, workspace, opts.shellOverride, plannedAgent)
+      ? resolveAgentLaunchRuntime(
+          store,
+          workspace,
+          opts.shellOverride,
+          plannedAgent,
+          opts.wslShellRule
+        )
       : undefined)
   const launch =
     plannedAgent && runtime
@@ -155,10 +166,15 @@ async function buildRuntimeAgentTerminalStartupOptions(
       platform: runtime.platform,
       isRemote,
       ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
+      ...(opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : {}),
+      // Quoted for the shell the PTY really is. Seam (F2): the window quoted by the Terminal shell
+      // setting (`shell: undefined`), which mis-quotes a WSL setting on a Windows-host project.
       shell: agentLaunchQuotingShell(runtime),
       sessionOptions: host.toSessionOptions(opts.launchPreferences)
     }),
     prompt: opts.startupPrompt ?? '',
+    ...(opts.promptCarry ? { promptCarry: opts.promptCarry } : {}),
+    ...(opts.startupPromptDelivery ? { promptDelivery: opts.startupPromptDelivery } : {}),
     cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
     hostIdentity: host.hostIdentity,
     host: {
@@ -192,7 +208,11 @@ async function buildRuntimeAgentTerminalStartupOptions(
     launchAgent: agent,
     startupCommandDelivery: startupPlan.startupCommandDelivery,
     // A bare command the user typed stays out of launch accounting, as before.
-    ...(opts.startupAgent ? { telemetry: agentStartedTelemetry(agent, opts.launchSource) } : {})
+    ...(opts.startupAgent
+      ? {
+          telemetry: agentStartedTelemetry(agent, opts.launchSource, opts.requestKind)
+        }
+      : {})
   }
 }
 

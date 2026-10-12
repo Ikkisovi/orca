@@ -61,6 +61,10 @@ export async function settleLaunchPromptDisposal(
   if (created.promptRodeLaunchCommand) {
     return HANDED_TO_TERMINAL
   }
+  // The caller's pane starts the agent; a prompt its command did not carry is the caller's to paste.
+  if (created.outcome.kind === 'pane') {
+    return NOT_DELIVERED
+  }
   return deliverTerminalLaunchPrompt(execution, created.outcome.handle, { freshLaunch: true })
 }
 

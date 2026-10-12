@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/agent-launch-pane-notice-text'
 import {
   launchAgentThroughHost,
+  startPaneLaunch,
   windowMakesHostLaunchTab,
   type HostAgentLaunchArgs,
   type HostAgentLaunchOutcome
@@ -29,15 +30,44 @@ function showLaunchNotStartedNotice(outcome: HostAgentLaunchOutcome, prompt: str
   if (outcome.kind !== 'not-started') {
     return
   }
-  toast.error(agentLaunchPaneNoticeText({ kind: 'not-started', code: outcome.code ?? '' }), {
-    action: {
-      label: translate(
-        'auto.components.terminal.pane.AgentLaunchPaneNotice.copyPrompt',
-        'Copy prompt'
-      ),
-      onClick: () => void window.api.ui.writeClipboardText(prompt)
-    }
+  const copy = translate(
+    'auto.components.terminal.pane.AgentLaunchPaneNotice.copyPrompt',
+    'Copy prompt'
+  )
+  toast.error(
+    agentLaunchPaneNoticeText({ kind: 'not-started', code: outcome.code ?? '' }),
+    prompt
+      ? { action: { label: copy, onClick: () => void window.api.ui.writeClipboardText(prompt) } }
+      : {}
+  )
+}
+
+/**
+ * A "+" tab whose pane starts the host's plan, made by this window's own prompt and WSL-shell
+ * rules (TEMPORARY parity). Returns the ids the caller makes its tab under.
+ */
+export function startNewTabPaneLaunch(
+  args: Omit<HostAgentLaunchArgs, 'windowRules' | 'carriedPrompt'> & {
+    /** The window's planner put the prompt on the command line. */
+    carriesPrompt: boolean
+    promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
+  }
+): { id: string; initialLeafId: string; agentLaunchPane: { leafId: string } } {
+  const { carriesPrompt, promptDelivery, ...launch } = args
+  const { tabId, leafId, outcome } = startPaneLaunch({
+    ...launch,
+    windowRules: true,
+    ...(carriesPrompt
+      ? {
+          carriedPrompt: {
+            text: args.prompt,
+            delivery: promptDelivery === 'draft' ? 'draft' : 'submit'
+          }
+        }
+      : {})
   })
+  void outcome.then((launched) => showLaunchNotStartedNotice(launched, args.prompt))
+  return { id: tabId, initialLeafId: leafId, agentLaunchPane: { leafId } }
 }
 
 /**

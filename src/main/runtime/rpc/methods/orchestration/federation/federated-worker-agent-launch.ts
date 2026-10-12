@@ -9,6 +9,7 @@
 
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import { agentLaunchSurfaceHandle } from '../../../../../../shared/agent-launch-intent'
 import { executeAgentLaunch } from '../../../../../agent-launch/agent-launch-executor'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
@@ -146,5 +147,8 @@ export async function launchFederatedWorkerAgent(args: {
   if (!worktree) {
     throw new Error('Federated worker topology did not resolve.')
   }
-  return { worktree, terminalHandle: launched.outcome.handle }
+  return {
+    worktree,
+    terminalHandle: agentLaunchSurfaceHandle(launched.outcome)
+  }
 }

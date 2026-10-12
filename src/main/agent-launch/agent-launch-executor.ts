@@ -36,7 +36,6 @@ import type {
 } from '../../shared/agent-launch-intent'
 import { withoutReservedAgentCreateFields } from '../../shared/agent-launch-intent'
 import {
-  argvLaunchPrompt,
   deliverTerminalLaunchPrompt,
   HANDED_TO_TERMINAL,
   promptReceipt,
@@ -68,6 +67,7 @@ import type {
   AgentLaunchPublishedSurface,
   AgentLaunchSurfaceExecution
 } from './agent-launch-execution'
+import { createTerminalSurface, terminalLaunchInputs } from './agent-launch-terminal-surface'
 
 export type { AgentLaunchExecution, AgentLaunchPublishedSurface } from './agent-launch-execution'
 
@@ -325,47 +325,6 @@ function ignoredStructuredAgentArgsWarning(
         warning:
           'Started a structured chat session using saved agent Arguments; the per-launch argument override was ignored.'
       }
-}
-
-/** What every route that builds a terminal agent passes on, so the startup terminal of a new
- *  workspace and the terminal of an existing one start the same agent. */
-function terminalLaunchInputs(intent: AgentLaunchIntent) {
-  return {
-    ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
-    // `null` is a value the caller meant, so this tests for absence rather than falsiness.
-    ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
-    ...(intent.cwd ? { cwd: intent.cwd } : {}),
-    ...(intent.launchSource ? { launchSource: intent.launchSource } : {}),
-    ...(intent.paneKey ? { paneKey: intent.paneKey } : {})
-  }
-}
-
-/**
- * The one place a terminal agent is created, so the structured-refusal downgrade builds the same
- * surface — carrying the same argv prompt — as a launch that chose a terminal outright.
- */
-async function createTerminalSurface(
-  execution: AgentLaunchSurfaceExecution,
-  workspace: { worktreeId: string; connectionId?: string | null }
-): Promise<CreatedSurface> {
-  const { intent, surfaces } = execution
-  const startupPrompt = argvLaunchPrompt(intent)
-  const terminal = await surfaces.createTerminalAgent({
-    worktreeId: workspace.worktreeId,
-    agent: intent.agent,
-    ...(startupPrompt ? { startupPrompt } : {}),
-    ...terminalLaunchInputs(intent),
-    viewMode: 'terminal'
-  })
-  return {
-    outcome: {
-      kind: 'terminal',
-      handle: terminal.handle,
-      ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {})
-    },
-    ...(terminal.warning ? { warning: terminal.warning } : {}),
-    ...(startupPrompt && terminal.promptRodeLaunchCommand ? { promptRodeLaunchCommand: true } : {})
-  }
 }
 
 /**

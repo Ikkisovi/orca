@@ -8,11 +8,11 @@ vi.mock('../../runtime/runtime-rpc-client', async () => ({
   callRuntimeRpc: vi.fn(),
   RuntimeRpcCallError: (await import('../../runtime/runtime-rpc-result')).RuntimeRpcCallError
 }))
-const spawn = vi.fn(async () => ({ id: 'pty_host', isReattach: true }))
+const spawn = vi.fn(async () => ({ id: 'pty_pane' }))
 const options = (): IpcPtyTransportOptions => ({
   worktreeId: 'folder:private',
-  tabId: 'tab_private',
-  leafId: 'leaf_private',
+  tabId: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+  leafId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
   launchAgent: 'opencode',
   command: 'opencode --model private-proof/model-b',
   agentPrompt: 'Read only',
@@ -25,34 +25,36 @@ describe('local OpenCode model launch authority', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     vi.stubGlobal('window', { api: { pty: { spawn } } })
-    spawn.mockResolvedValue({ id: 'pty_host', isReattach: true })
-    vi.mocked(callRuntimeRpc).mockResolvedValue({
-      terminal: { ptyId: 'pty_host' },
-      disposition: 'created'
-    })
+    spawn.mockResolvedValue({ id: 'pty_pane' })
+    vi.mocked(callRuntimeRpc).mockResolvedValue({ outcome: { kind: 'pane' } })
   })
   afterEach(() => vi.unstubAllGlobals())
 
-  it('sends preferences to the execution host and attaches only to its returned PTY', async () => {
+  it('has the execution host plan the model launch, then spawns its own pane to run it', async () => {
     const claimReplacedPtyId = vi.fn(() => 'pty_previous')
     expect(await spawnIpcPty(options(), { ...connect, claimReplacedPtyId })).toMatchObject({
-      id: 'pty_host'
+      id: 'pty_pane'
     })
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'local' },
-      'terminal.createAgentSession',
+      'agent.launchReplay',
       expect.objectContaining({
         agent: 'opencode',
-        launchPreferences: { model: 'private-proof/model-b' },
-        prompt: 'Read only',
-        promptDelivery: 'auto-submit',
-        placement: { tabId: 'tab_private', leafId: 'leaf_private' }
+        sessionOptions: { model: 'private-proof/model-b' },
+        prompt: { text: 'Read only', delivery: 'submit' },
+        promptCarry: 'window',
+        paneKey: `${options().tabId}:${options().leafId}`,
+        spawnTrigger: 'window-pane'
       })
     )
+    // At the pane's own size, never a reattach to a terminal the host made.
+    expect(spawn).toHaveBeenCalledOnce()
     expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'pty_host', command: undefined })
+      expect.objectContaining({ tabId: options().tabId, cols: 80, rows: 24 })
     )
-    expect(claimReplacedPtyId).not.toHaveBeenCalled()
+    expect(spawn).not.toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: expect.anything() })
+    )
   })
 
   it('preserves one operation ID across a lost reply and reconnect', async () => {
@@ -60,10 +62,10 @@ describe('local OpenCode model launch authority', () => {
     vi.mocked(callRuntimeRpc).mockRejectedValueOnce(new Error('reply lost'))
     await spawnIpcPty(transport, connect)
     await spawnIpcPty(transport, connect)
-    const operationRequest = z.object({ clientOperationId: z.string() })
+    const operationRequest = z.object({ operationId: z.string() })
     const ids = vi
       .mocked(callRuntimeRpc)
-      .mock.calls.map((call) => operationRequest.parse(call[2]).clientOperationId)
+      .mock.calls.map((call) => operationRequest.parse(call[2]).operationId)
     expect(ids).toHaveLength(3)
     expect(new Set(ids).size).toBe(1)
     expect(ids[0]).toMatch(/^\d{13}-[0-9a-f]{32}$/)

@@ -48,6 +48,12 @@ export type AgentLaunchFingerprintInput = {
   /** In: a retry that minted another session is a different request, since replaying would answer
    *  with a conversation this caller did not mint. */
   sessionId?: string
+  /** In: they decide what runs and who starts it. `title` and `requestKind` are out (below). */
+  spawnTrigger?: string
+  extraAgentArgs?: string
+  terminalOnly?: boolean
+  promptCarry?: string
+  wslShellRule?: string
   /**
    * `launchSource` is deliberately absent, and this is the reasoned exclusion rather than an
    * oversight: it is telemetry, so two launches differing only in which button produced them do the
@@ -75,7 +81,12 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     cwd: input.cwd,
     // Absent keys are dropped by the canonical form, so every digest without one is unchanged.
     paneKey: input.paneKey,
-    sessionId: input.sessionId
+    sessionId: input.sessionId,
+    spawnTrigger: input.spawnTrigger,
+    extraAgentArgs: input.extraAgentArgs,
+    terminalOnly: input.terminalOnly,
+    promptCarry: input.promptCarry,
+    wslShellRule: input.wslShellRule
   })
 }
 

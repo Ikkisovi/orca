@@ -128,6 +128,11 @@ const store = {
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: mockToastError } }))
+// The host hands a terminal launch to the pane this window laid out.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  callRuntimeRpc: vi.fn(async () => ({ outcome: { kind: 'pane' } }))
+}))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({ reconcileTabOrder: vi.fn(() => []) }))
 vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady

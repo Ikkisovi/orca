@@ -4,7 +4,8 @@ import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function preparePtyIpcQoderCommand(ctx: PtyIpcSpawnState): Promise<void> {
-  if (ctx.preAdoptedStablePane || ctx.args.launchAgent !== 'qoder') {
+  // A host plan already ran the planner's own Qoder rewrite.
+  if (ctx.preAdoptedStablePane || ctx.paneLaunch || ctx.args.launchAgent !== 'qoder') {
     return
   }
   const connectionId = ctx.args.connectionId

@@ -197,3 +197,35 @@ export function expectedWindowProvider(
     orcaEnv: IDENTITY_ENV_KEYS.filter((key) => key in env)
   }
 }
+
+/** What the window sends the host for a row 1 or 2 case (startPaneLaunch), less its operation id. */
+export function paneLaunchParams(c: WindowLaunchCase): Record<string, unknown> {
+  const { producer } = c
+  if (producer.kind === 'transcript-continue') {
+    throw new Error('row 6 is not on the pane trigger')
+  }
+  const source =
+    producer.kind === 'plus'
+      ? { menu: 'tab_bar_quick_launch', shortcut: 'shortcut', dashboard: 'unknown' }[producer.via]
+      : producer.kind === 'quick-command'
+        ? 'quick_command'
+        : 'terminal_context_menu'
+  return {
+    agent: producer.agent,
+    target: { kind: 'existing', worktree: `id:${launchWorkspaceId(c.workspace)}` },
+    paneKey: `${LAUNCH_TAB_ID}:${LAUNCH_LEAF_ID}`,
+    spawnTrigger: 'window-pane',
+    promptCarry: 'window',
+    wslShellRule: 'window',
+    launchSource: source,
+    ...(producer.kind === 'continuation' ? { cwd: producer.initialCwd } : {}),
+    ...(producer.kind === 'plus'
+      ? {}
+      : {
+          prompt: {
+            text: producer.prompt,
+            delivery: producer.kind === 'continuation' ? 'draft' : 'submit'
+          }
+        })
+  }
+}

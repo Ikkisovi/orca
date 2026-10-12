@@ -11,10 +11,13 @@ import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { ReplacedPaneOwner } from '../pane/pane-owner-replacement'
 import { localProvider } from '../provider/registry'
 import type { AdoptStablePaneResult, PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
+import type { AgentLaunchPanePlan } from '../../../agent-launch/agent-launch-pane-attachment'
 
 export type PtyIpcSpawnState = {
   deps: PtySpawnIpcDeps
   args: PtySpawnIpcArgs
+  /** The host's plan this pane's spawn runs (`spawnTrigger: 'window-pane'`); it settles the launch. */
+  paneLaunch?: AgentLaunchPanePlan
   spawnTiming: PtySpawnTiming
   codexHomeLaunchStartedAt: Date | undefined
   codexHomeLaunchStartedSequence: number | undefined

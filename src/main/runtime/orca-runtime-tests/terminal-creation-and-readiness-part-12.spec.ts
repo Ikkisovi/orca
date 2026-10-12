@@ -226,6 +226,9 @@ describe('OrcaRuntimeService', () => {
         paneKey: `${RESERVED_TAB_ID}:${RESERVED_LEAF_ID}`,
         startupPrompt: 'fix the build'
       })
+      if ('handedToPane' in surface) {
+        throw new Error('expected the host to start the terminal')
+      }
       expect(surface.paneKey).toBe(`${RESERVED_TAB_ID}:${RESERVED_LEAF_ID}`)
       expect(requestTabCreate).not.toHaveBeenCalled()
       expect(spawn).toHaveBeenCalledWith(

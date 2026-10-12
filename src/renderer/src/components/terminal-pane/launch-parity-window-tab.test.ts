@@ -20,6 +20,7 @@ import {
   LAUNCH_TOKEN,
   PANE_GRID,
   launchWorkspaceId,
+  paneLaunchParams,
   windowSpawnRequest,
   type WindowLaunchCase
 } from '../../../../shared/launch-parity-window-request.test-fixture'
@@ -29,6 +30,16 @@ vi.mock('@/store', async () =>
   (await import('@/lib/launch-parity-renderer.test-fixture')).launchStoreModuleMock(holder)
 )
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+// The host hands each pane-trigger launch back to its pane, as main's agent.launch does.
+const callRuntimeRpc = vi.hoisted(() =>
+  vi.fn(async (_target: unknown, _method: string, params: Record<string, unknown>) => ({
+    outcome: { kind: 'pane', paneKey: params.paneKey }
+  }))
+)
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  callRuntimeRpc
+}))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -206,6 +217,23 @@ describe('window-tab producers: the pty:spawn request a real pane sends', () => 
   })
 
   it.each([...WINDOW_LAUNCH_CASES, ...PLUS_LAUNCH_CASES])('row $row: $name', async (c) => {
+    callRuntimeRpc.mockClear()
     expect(await paneSpawnRequest(c)).toEqual(windowSpawnRequest(c))
+    // Rows 1 and 2 ask the host for the plan their pane runs (pty-launch-parity.test.ts, main half).
+    const sent = callRuntimeRpc.mock.calls.map(([, method, params]) => ({ method, params }))
+    expect(sent).toEqual(
+      c.row === 6
+        ? []
+        : [
+            {
+              method: 'agent.launchReplay',
+              params: {
+                ...paneLaunchParams(c),
+                operationId: expect.any(String),
+                paneKey: expect.any(String)
+              }
+            }
+          ]
+    )
   })
 })

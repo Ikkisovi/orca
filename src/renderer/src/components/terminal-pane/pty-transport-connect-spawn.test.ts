@@ -100,20 +100,19 @@ describe('createIpcPtyTransport', () => {
     expect(spawn).not.toHaveBeenCalled()
   })
 
-  it("spawns a launch pane this window made only once the host has taken it, and never once it's gone", async () => {
+  it("spawns a launch pane this window made only once the host has answered, and never once it's gone", async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
-    const { holdAgentLaunchPaneSpawn, releaseAgentLaunchPaneSpawn } =
-      await import('@/lib/agent-launch-pane-spawn-hold')
+    const { holdAgentLaunchPaneSpawn } = await import('@/lib/agent-launch-pane-spawn-hold')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
     const pane = { worktreeId: 'wt', tabId: 'tab-held', leafId: 'leaf-held' }
 
-    holdAgentLaunchPaneSpawn(pane.tabId, pane.leafId)
+    const answered = holdAgentLaunchPaneSpawn(pane.tabId, pane.leafId)
     const transport = createIpcPtyTransport(pane)
     const connecting = transport.connect({ url: '', callbacks: {} })
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(spawn).not.toHaveBeenCalled()
 
-    releaseAgentLaunchPaneSpawn(pane.tabId, pane.leafId)
+    answered()
     await connecting
     expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ tabId: 'tab-held' }))
     transport.disconnect()

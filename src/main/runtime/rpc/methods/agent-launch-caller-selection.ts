@@ -35,11 +35,11 @@ export function selectAgentLaunchTabForCaller(
   const { outcome } = surface
   // Found by pane or session, never by a predicted tab id.
   const selector =
-    outcome.kind === 'terminal'
-      ? outcome.paneKey
+    outcome.kind === 'structured'
+      ? { sessionId: outcome.sessionId }
+      : outcome.paneKey
         ? parsePaneKey(outcome.paneKey)
         : null
-      : { sessionId: outcome.sessionId }
   if (!selector) {
     return
   }

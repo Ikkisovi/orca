@@ -33,7 +33,6 @@ import {
   trackTerminalSpawnDispatch,
   type TerminalSpawnDispatch
 } from '../../../agent-launch/agent-launch-not-started'
-import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
 import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
 import {
@@ -67,6 +66,12 @@ import {
   withPlacement,
   type AgentLaunchView
 } from './agent-launch-tab-publication'
+import { joinOrRunAgentLaunch } from './agent-launch-in-flight'
+import {
+  assertWindowPaneTrigger,
+  windowPaneAnswer,
+  windowPaneLaunch
+} from './agent-launch-window-pane'
 
 /**
  * Advertising `agent.launch.v2` is a client's statement that it understands EITHER outcome — a
@@ -133,10 +138,15 @@ async function runAgentLaunch(
     ),
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
     ...(callerRendersLaunchedChat(context, intent.agent) ? {} : { callerRendersStructured: false }),
+    // The caller's pane is a terminal pane.
+    ...(intent.terminalOnly || view.pane ? { terminalOnly: true } : {}),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
     onSurfacePublished: (surface) => {
       view.early?.surfacePublished(surface)
-      replaySafe?.recordSurface(withPlacement(surface, view))
+      // A plan handed to its pane is recorded when that pane's spawn settles it.
+      if (surface.outcome.kind !== 'pane') {
+        replaySafe?.recordSurface(withPlacement(surface, view))
+      }
       if (callerNavigationId !== null && view.presentation !== 'background') {
         selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
       }
@@ -175,32 +185,15 @@ function runLegacyAgentLaunch(
   return execute()
 }
 
-type ActiveAgentLaunch = {
-  fingerprint: string
-  promise: Promise<AgentLaunchResult>
-}
-
-const activeAgentLaunchesByRuntime = new WeakMap<
-  OrcaRuntimeService,
-  Map<string, ActiveAgentLaunch>
->()
-
-function activeAgentLaunchesFor(runtime: OrcaRuntimeService): Map<string, ActiveAgentLaunch> {
-  let active = activeAgentLaunchesByRuntime.get(runtime)
-  if (!active) {
-    active = new Map()
-    activeAgentLaunchesByRuntime.set(runtime, active)
-  }
-  return active
-}
-
 async function executeReplaySafeAgentLaunch(
   params: AgentLaunchParams & { operationId: string },
   context: RpcContext,
   fingerprint: string
 ): Promise<AgentLaunchResult> {
-  // The tab is the host's first act: admission has a cold cost the user should not watch.
-  const early = await publishEarlyTab(params, context)
+  // The tab is the host's first act: admission has a cold cost the user should not watch. A
+  // caller that laid out its own pane already shows it.
+  const early =
+    params.spawnTrigger === 'window-pane' ? null : await publishEarlyTab(params, context)
   let admission: Awaited<ReturnType<typeof admitAgentLaunchOperation>>
   try {
     admission = await admitAgentLaunchOperation(context, params, fingerprint, Date.now())
@@ -223,10 +216,18 @@ async function executeReplaySafeAgentLaunch(
     return admission.result
   }
   early?.executing()
+  const pane =
+    params.spawnTrigger === 'window-pane'
+      ? windowPaneLaunch(context, admission, {
+          key: agentSessionOperationKey(admission.callerKey, params.operationId),
+          fingerprint
+        })
+      : undefined
   return withEarlyTab(early, () =>
     executeAdmittedAgentLaunch(params, context, admission, {
       early,
-      presentation: params.presentation
+      presentation: params.presentation,
+      ...(pane ? { pane } : {})
     })
   )
 }
@@ -274,6 +275,10 @@ async function executeAdmittedAgentLaunch(
     // The user closed its tab after the spawn left: the agent stops, as any closed tab's does.
     await settleLaunchWhoseTabWasClosed(context, view.early, admission)
   }
+  if (result.outcome.kind === 'pane') {
+    view.pane?.answered(result)
+    return result
+  }
   // Bookkeeping: a failure leaves the first write, whose owed prompt replays as `unconfirmed` (or as
   // `unknown` to a caller that cannot read it), never as `not-delivered`.
   await settleQuietly(admission.settle(result))
@@ -284,26 +289,13 @@ function runReplaySafeAgentLaunch(
   params: AgentLaunchParams & { operationId: string },
   context: RpcContext
 ): Promise<AgentLaunchResult> {
-  const callerKey = agentLaunchOperationCallerKey(context)
-  const key = agentSessionOperationKey(callerKey, params.operationId)
+  const key = agentSessionOperationKey(agentLaunchOperationCallerKey(context), params.operationId)
   const fingerprint = computeAgentLaunchFingerprint(params)
-  const activeAgentLaunches = activeAgentLaunchesFor(context.runtime)
-  const active = activeAgentLaunches.get(key)
-  if (active) {
-    if (active.fingerprint !== fingerprint) {
-      return Promise.reject(new Error('agent_session_operation_conflict'))
-    }
-    return active.promise
-  }
-
-  let promise: Promise<AgentLaunchResult>
-  promise = executeReplaySafeAgentLaunch(params, context, fingerprint).finally(() => {
-    if (activeAgentLaunches.get(key)?.promise === promise) {
-      activeAgentLaunches.delete(key)
-    }
-  })
-  activeAgentLaunches.set(key, { fingerprint, promise })
-  return promise
+  return joinOrRunAgentLaunch(
+    context.runtime,
+    { key, fingerprint, waiting: windowPaneAnswer(key) },
+    () => executeReplaySafeAgentLaunch(params, context, fingerprint)
+  )
 }
 
 export const AGENT_LAUNCH_METHODS = [
@@ -316,6 +308,7 @@ export const AGENT_LAUNCH_METHODS = [
         throw new Error('agent_launch_replay_unsupported')
       }
       assertAgentLaunchTargetAuthorized(params.target, context)
+      assertWindowPaneTrigger(params, context)
       try {
         return await runReplaySafeAgentLaunch(params, context)
       } catch (error) {
@@ -347,6 +340,7 @@ export const AGENT_LAUNCH_METHODS = [
         throw new Error('agent_launch_unsupported')
       }
       assertAgentLaunchTargetAuthorized(params.target, context)
+      assertWindowPaneTrigger(params, context)
       if (!params.operationId) {
         return runLegacyAgentLaunch(params, context)
       }

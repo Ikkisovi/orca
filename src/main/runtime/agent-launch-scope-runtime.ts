@@ -52,15 +52,18 @@ export function agentLaunchPlatformForScope(
 export function agentLaunchProjectRuntime(
   store: LaunchScopeRuntimeStore,
   scope: TerminalWorkspaceLaunchScope,
-  agent: TuiAgent | undefined
+  agent: TuiAgent | undefined,
+  // TEMPORARY parity: `window` (a window tab's own launch) leaves out the two temporary terms.
+  wslShellRule: 'window' | 'host' = 'host'
 ): ProjectExecutionRuntimeResolution | undefined {
   const runtime = resolveLocalLaunchScopeRuntime(store, scope)
   const onWindowsHost = runtime?.status === 'resolved' && runtime.runtime.kind === 'windows-host'
   // Main had no runtime here: only folders, since every local repo has a project.
-  const mainHadNone = !resolveLocalProjectRuntimeForWorktreeId(store, scope.id)
+  const mainHadNone =
+    wslShellRule === 'host' && !resolveLocalProjectRuntimeForWorktreeId(store, scope.id)
   const pathDecides =
     // PERMANENT fix, not parity: a `\\wsl$` cwd runs in WSL whatever the setting says. Keep it
-    // when the temporary terms go; the window adopts it in C2.
+    // when the temporary terms go; a window tab's own launch keeps it too.
     (onWindowsHost && isWslUncPath(scope.path)) ||
     // TEMPORARY (STA-10231): an explicit Windows host can't be told from the shipped default.
     (onWindowsHost && mainHadNone) ||
@@ -76,7 +79,8 @@ export function resolveAgentLaunchRuntime(
   store: AgentLaunchRuntimeStore,
   scope: TerminalWorkspaceLaunchScope,
   requestedShellOverride: string | undefined,
-  agent: TuiAgent | undefined
+  agent: TuiAgent | undefined,
+  wslShellRule?: 'window' | 'host'
 ): AgentLaunchRuntime {
   if (scope.connectionId) {
     return {
@@ -84,7 +88,7 @@ export function resolveAgentLaunchRuntime(
       pty: { shellOverride: undefined, terminalWindowsWslDistro: null }
     }
   }
-  const projectRuntime = agentLaunchProjectRuntime(store, scope, agent)
+  const projectRuntime = agentLaunchProjectRuntime(store, scope, agent, wslShellRule)
   // Refused here, before any spawn, where the spawn would refuse it: Windows only.
   if (process.platform === 'win32' && projectRuntime?.status === 'repair-required') {
     // OrchestrationError because the launch record keeps a refusal's code only from that class.
@@ -95,7 +99,15 @@ export function resolveAgentLaunchRuntime(
   }
   return {
     platform: executionRuntimePlatform(projectRuntime, scope.path, process.platform),
-    pty: resolveLocalPtyOptions(store.getSettings(), projectRuntime, requestedShellOverride)
+    pty: resolveLocalPtyOptions(
+      store.getSettings(),
+      projectRuntime,
+      // The window's rule: with no runtime, a `\\wsl$` path opens in WSL.
+      requestedShellOverride ??
+        (wslShellRule === 'window' && !projectRuntime && isWslUncPath(scope.path)
+          ? 'wsl.exe'
+          : undefined)
+    )
   }
 }
 

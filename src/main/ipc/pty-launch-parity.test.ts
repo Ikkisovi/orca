@@ -1,3 +1,6 @@
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { classifyErrorMock, trackMock } from './pty-ipc-mock-registry'
@@ -17,6 +20,7 @@ import { PLUS_LAUNCH_CASES } from '../../shared/launch-parity-plus-cases.test-fi
 import {
   expectedWindowProvider,
   launchWorkspaceId,
+  paneLaunchParams,
   windowSpawnRequest,
   type LaunchWorkspace,
   type WindowProviderFacts
@@ -36,6 +40,8 @@ import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 import { TERMINAL_LIFECYCLE_METHODS } from '../runtime/rpc/methods/terminal/terminal-lifecycle-methods'
 import { AGENT_SESSION_METHODS } from '../runtime/rpc/methods/agent-session'
+import { AGENT_LAUNCH_METHODS } from '../runtime/rpc/methods/agent-launch'
+import { openTestAgentSessionRecordStore } from '../runtime/agent-session-record-store-test-harness'
 import { applyManagedDataAccountEnvironment } from '../managed-data-accounts/launch-environment'
 import { probeOpenCodeLaunchCapabilities } from '../opencode/opencode-launch-capabilities'
 import {
@@ -259,6 +265,59 @@ describe('host lane: producer call -> runtime controller -> provider', () => {
     })
     const phone = await lanes.runtime.listMobileSessionTabs(`id:${launchWorkspaceId(c.workspace)}`)
     expect(pick({ ...phone.tabs[0] }, ['title', 'launchAgent', 'isActive'])).toEqual(c.phone)
+  })
+})
+
+// C2 re-pins rows 1 and 2 on the pane trigger: the host plans from what the window sends, and the
+// pane's spawn runs that plan, never the window's own command, reaching the provider as before.
+describe('pane-trigger lane: window launch -> host plan -> pane spawn -> provider', () => {
+  const suite = setupPtyIpcSuite()
+  afterEach(() => restoreMainPlatform())
+
+  it.each(
+    [...WINDOW_LAUNCH_CASES, ...PLUS_LAUNCH_CASES]
+      .filter((c) => c.row !== 6)
+      .map((c) => ({ c, label: `row ${c.row}: ${c.name}` }))
+  )('$label', async ({ c }) => {
+    setMainPlatform(c.client)
+    const lanes = startParityLanes(suite, { workspace: c.workspace, settings: c.settings })
+    const ledger = await openTestAgentSessionRecordStore(await mkdtemp(join(tmpdir(), 'parity-')))
+    vi.spyOn(lanes.runtime, 'openAgentSessionRecordStore').mockResolvedValue(ledger)
+    vi.spyOn(lanes.runtime, 'openedAgentSessionRecordStore').mockReturnValue(ledger)
+    const dispatcher = new RpcDispatcher({ runtime: lanes.runtime, methods: AGENT_LAUNCH_METHODS })
+    const response = await dispatcher.dispatch(
+      {
+        id: 'parity',
+        authToken: 'token',
+        method: 'agent.launchReplay',
+        params: {
+          ...paneLaunchParams(c),
+          operationId: `${Date.now()}-0123456789abcdef0123456789abcdef`
+        }
+      },
+      {
+        clientId: 'desktop-renderer',
+        caller: DESKTOP_RPC_CALLER,
+        clientKind: 'runtime',
+        clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
+      }
+    )
+    expect(response.ok ? response.result : response.error).toMatchObject({
+      outcome: { kind: 'pane' }
+    })
+    const request = windowSpawnRequest(c)
+    // The window still queues its own line; main must run the host's plan instead.
+    await lanes.spawnWindow({
+      ...request,
+      command: 'window-command-not-run',
+      launchConfig: undefined,
+      telemetry: undefined
+    })
+
+    expect(await providerFacts(lanes.provider)).toEqual(
+      expectedWindowProvider(request, c.provider, c.request.agentEnv ?? {})
+    )
+    expect(trackMock.mock.calls).toEqual([['agent_started', request.telemetry]])
   })
 })
 

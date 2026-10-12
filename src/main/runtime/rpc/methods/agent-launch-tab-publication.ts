@@ -40,6 +40,7 @@ import {
 import type { RpcContext } from '../core'
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchOperationCallerKey } from './agent-launch-replay'
+import type { WindowPaneLaunch } from './agent-launch-window-pane'
 
 /** Whether a launch may move the host window at all: a paired device's launch moves only its own
  *  view, as its browser tabs do. The tab shown first and the spawn's own reveal both ask this. */
@@ -101,10 +102,12 @@ export type EarlyAgentLaunchTab = {
   placement(): AgentLaunchPlacementReceipt | undefined
 }
 
-/** The view half of a launch: the tab shown before it ran, and whether the caller's view moves. */
+/** The view half of a launch: the tab shown before it ran, and whether the caller's view moves.
+ *  `pane`: the caller's own pane starts the agent from the host's plan. */
 export type AgentLaunchView = {
   early: EarlyAgentLaunchTab | null
   presentation: AgentLaunchParams['presentation']
+  pane?: WindowPaneLaunch
 }
 
 export function withPlacement(result: AgentLaunchResult, view: AgentLaunchView): AgentLaunchResult {

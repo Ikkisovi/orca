@@ -65,6 +65,9 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       await pathUsable
     }
   }
+  // On Windows a host plan decided the shell (PowerShell or WSL); nothing here may pick another.
+  const plannedPty =
+    process.platform === 'win32' ? ctx.paneLaunch?.plan.launchRuntime?.pty : undefined
   if (!ctx.preAdoptedStablePane) {
     // Why: reattach needs exact cwd, and successful stable-pane adoption needs no launch preflight.
     const requestedMissingCwdFallback = !args.sessionId && args.cwdFallback === 'worktree'
@@ -77,12 +80,13 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       requestedMissingCwdFallback && isPosixStartupCwd ? ctx.cwd : undefined
     const startupTerminalRuntimeOptions =
       requestedMissingCwdFallback && process.platform === 'win32'
-        ? resolveLocalWindowsTerminalRuntimeOptions({
+        ? (plannedPty ??
+          resolveLocalWindowsTerminalRuntimeOptions({
             requestedShellOverride: args.shellOverride,
             settings: ctx.deps.getSettings?.(),
             projectRuntime: args.projectRuntime,
             fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
-          })
+          }))
         : undefined
     const wslRuntimeOwnsStartupCwd =
       requestedMissingCwdFallback &&
@@ -175,7 +179,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
   }
   ctx.isClaudeLaunch = !ctx.preAdoptedStablePane && isClaudeLaunchCommand(args.command)
   ctx.terminalRuntimeOptions =
-    process.platform === 'win32'
+    plannedPty ??
+    (process.platform === 'win32'
       ? resolveLocalWindowsTerminalRuntimeOptions({
           requestedShellOverride: args.shellOverride,
           settings: ctx.deps.getSettings?.(),
@@ -187,7 +192,7 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
             args.shellOverride ??
             (ctx.deps.getSettings?.()?.terminalDefaultShell?.trim() || undefined),
           terminalWindowsWslDistro: null
-        }
+        })
   const initialShellOverride = ctx.terminalRuntimeOptions.shellOverride
   // Why: daemon host-env setup needs a stable id BEFORE provider.spawn so buildPtyHostEnv hooks/Pi cleanup can run; daemon still honors opts.sessionId ?? mint().
   // Note: sessionId is STABLE across daemon restarts by design — do NOT simplify to a fresh UUID per spawn; that orphans reconnectable state.

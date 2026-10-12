@@ -1,11 +1,11 @@
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
-import type { RuntimeCreateAgentSessionResult } from '../../../../shared/agent-session-host-authority'
 import {
   createAgentSessionCreateOperation,
   type AgentSessionCreateOperation
 } from '../../runtime/agent-session-create-operation'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { toRuntimeTerminalWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
 const modelLaunchOperations = new WeakMap<IpcPtyTransportOptions, AgentSessionCreateOperation>()
@@ -30,44 +30,7 @@ export async function spawnIpcPty(
       (value) => value !== undefined
     )
   ) {
-    const { worktreeId, tabId, leafId, connectionId, resumeProviderSession } = transportOptions
-    if (!worktreeId || !tabId || !leafId || connectionId || resumeProviderSession) {
-      throw new Error('capability_unsupported')
-    }
-    let operation = modelLaunchOperations.get(transportOptions)
-    if (!operation) {
-      operation = createAgentSessionCreateOperation()
-      modelLaunchOperations.set(transportOptions, operation)
-    }
-    const created = await operation.run((clientOperationId) =>
-      callRuntimeRpc<RuntimeCreateAgentSessionResult>(
-        { kind: 'local' },
-        'terminal.createAgentSession',
-        {
-          clientOperationId,
-          worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
-          agent: 'opencode',
-          prompt: transportOptions.agentPrompt,
-          promptDelivery: transportOptions.agentPromptDelivery,
-          agentArgs: transportOptions.agentArgsOverride,
-          launchPreferences: transportOptions.agentLaunchPreferences,
-          startupCwd: transportOptions.cwd,
-          placement: { tabId, leafId },
-          presentation: 'background',
-          ...(transportOptions.terminalKittyKeyboardProtocol === true
-            ? { terminalKittyKeyboardProtocol: true }
-            : {})
-        }
-      )
-    )
-    if (!created.terminal.ptyId) {
-      throw new Error('agent_session_operation_unknown')
-    }
-    return spawnIpcPty(
-      { ...transportOptions, command: undefined, launchConfig: undefined },
-      { ...connectOptions, command: undefined, launchConfig: undefined },
-      created.terminal.ptyId
-    )
+    await launchOpenCodeModelIntoPane(transportOptions)
   }
   const {
     cwd,
@@ -144,4 +107,49 @@ export async function spawnIpcPty(
     ...(terminalKittyKeyboardProtocol === true ? { terminalKittyKeyboardProtocol: true } : {}),
     ...(telemetry ? { telemetry } : {})
   })
+}
+
+/** The host checks the model and plans the launch; this pane's own spawn then runs that plan. */
+async function launchOpenCodeModelIntoPane(
+  transportOptions: IpcPtyTransportOptions
+): Promise<void> {
+  const { worktreeId, tabId, leafId, connectionId, resumeProviderSession } = transportOptions
+  if (!worktreeId || !tabId || !leafId || connectionId || resumeProviderSession) {
+    throw new Error('capability_unsupported')
+  }
+  let operation = modelLaunchOperations.get(transportOptions)
+  if (!operation) {
+    operation = createAgentSessionCreateOperation()
+    modelLaunchOperations.set(transportOptions, operation)
+  }
+  const { agentPrompt, agentPromptDelivery, agentArgsOverride, agentLaunchPreferences } =
+    transportOptions
+  const sessionOptions = Object.entries(agentLaunchPreferences ?? {}).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string'
+  )
+  await operation.run((operationId) =>
+    callRuntimeRpc({ kind: 'local' }, 'agent.launchReplay', {
+      agent: 'opencode',
+      operationId,
+      target: {
+        kind: 'existing',
+        worktree: toRuntimeTerminalWorktreeSelector(worktreeId)
+      },
+      paneKey: makePaneKey(tabId, leafId),
+      spawnTrigger: 'window-pane',
+      sessionOptions: Object.fromEntries(sessionOptions),
+      ...(agentArgsOverride !== undefined ? { agentArgs: agentArgsOverride } : {}),
+      ...(transportOptions.cwd ? { cwd: transportOptions.cwd } : {}),
+      // The prompt rides the command line, as the host's chat create put it there.
+      ...(agentPrompt
+        ? {
+            prompt: {
+              text: agentPrompt,
+              delivery: agentPromptDelivery === 'draft' ? 'draft' : 'submit'
+            },
+            promptCarry: 'window'
+          }
+        : {})
+    })
+  )
 }

@@ -1,25 +1,21 @@
 /**
- * A desktop launch started through the host's `agent.launch`, with no prompt.
+ * A desktop agent tab launched through the host's `agent.launch`.
  *
  * This window owns the workspace's tab layout, so it makes the agent's tab at the click, in the
  * split it was asked for, as any new agent tab is made. The host records the launch under this
- * click's operation id and starts the agent into that tab's pane. The pane's spawn waits until the
- * host has taken it (`agent-launch-pane-spawn-hold`), then attaches to the agent or says why it could
- * not start. The prompt stays this window's to paste, as main pastes it, once the agent has started.
+ * click's operation id and plans it; the tab's own pane then starts the planned agent, holding its
+ * spawn until the host has answered (`agent-launch-pane-spawn-hold`). A prompt the command line does
+ * not carry stays this window's to paste, as main pastes it, once the agent is ready.
  */
 
 import { useAppStore } from '@/store'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { rememberAgentLaunchPanePrompt } from '@/lib/agent-launch-pane-prompt'
-import {
-  holdAgentLaunchPaneSpawn,
-  isAgentLaunchPaneSpawnHeld
-} from '@/lib/agent-launch-pane-spawn-hold'
+import { holdAgentLaunchPaneSpawn } from '@/lib/agent-launch-pane-spawn-hold'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { callRuntimeRpc, RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
 import { createAgentSessionOperationId } from '@/runtime/agent-session-operation-id'
-import { isAgentLaunchResult } from '../../../shared/agent-launch-intent'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-closed'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { isNativeChatEnabled } from '../../../shared/structured-native-chat-launch-route'
@@ -46,42 +42,23 @@ export type HostAgentLaunchArgs = {
   pendingActivationSpawn?: boolean
   /** The view the tab opens in, decided as for any new agent tab. */
   viewMode?: Tab['viewMode']
+  /** A "+" tab: the window's own prompt and WSL-shell rules (TEMPORARY parity). */
+  windowRules?: true
+  /** The prompt the window's rule carries on the command line; anything else the window pastes. */
+  carriedPrompt?: { text: string; delivery: 'submit' | 'draft' }
 }
 
 /** What became of the launch, as this window must tell it. */
 export type HostAgentLaunchOutcome =
-  /** The agent was started in this tab's pane, which is attached to it. */
+  /** The host handed the launch to this tab's pane, which starts the agent. */
   | { kind: 'started' }
-  /** The pane shows how the launch ended. */
-  | { kind: 'pane-says' }
   /** The user closed the tab while it started, and with it the launch: nothing more to say. */
   | { kind: 'closed-by-user' }
-  /** The tab is gone, so the window says nothing started there. */
+  /** Nothing started; this window closed the tab and says why. */
   | { kind: 'not-started'; code?: string }
-
-/** Refused at admission: nothing ran under this click, and the host takes back the tab it was shown. */
-const ADMISSION_REFUSAL_CODES = new Set([
-  'agent_session_operation_invalid',
-  'agent_session_operation_conflict',
-  'agent_session_operation_expired',
-  'agent_session_operation_capacity'
-])
 
 function tabExists(worktreeId: string, tabId: string): boolean {
   return (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)
-}
-
-function closeLaunchTab(worktreeId: string, tabId: string): void {
-  if (tabExists(worktreeId, tabId)) {
-    useAppStore.getState().closeTab(tabId, { recordInteraction: false })
-  }
-}
-
-// Only a terminal in this pane is one the window can paste into; anything else, its pane explains.
-function outcomeFromResult(result: unknown): HostAgentLaunchOutcome {
-  return isAgentLaunchResult(result) && result.outcome.kind === 'terminal'
-    ? { kind: 'started' }
-    : { kind: 'pane-says' }
 }
 
 function stringSessionOptions(options: Record<string, SessionOptionValue> | undefined): {
@@ -101,34 +78,67 @@ function launchParams(args: HostAgentLaunchArgs) {
     ...(args.cwd ? { cwd: args.cwd } : {}),
     ...stringSessionOptions(args.sessionOptions),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
-    ...(args.groupId ? { placement: { groupId: args.groupId } } : {}),
-    presentation: 'focused'
+    ...(args.windowRules
+      ? {
+          // TEMPORARY parity: a "+" tab keeps the window's own prompt and WSL-shell rules.
+          promptCarry: 'window',
+          wslShellRule: 'window',
+          ...(args.carriedPrompt ? { prompt: args.carriedPrompt } : {})
+        }
+      : {}),
+    spawnTrigger: 'window-pane'
   }
 }
 
 async function settleLaunch(
-  args: HostAgentLaunchArgs,
-  pane: { tabId: string; leafId: string },
+  worktreeId: string,
+  tabId: string,
   send: Promise<unknown>,
   releaseHold: () => void
 ): Promise<HostAgentLaunchOutcome> {
   try {
-    return outcomeFromResult(await send)
+    await send
+    return { kind: 'started' }
   } catch (error) {
     const code = error instanceof RuntimeRpcCallError ? error.code : undefined
     if (code === AGENT_LAUNCH_TAB_CLOSED_CODE) {
       return { kind: 'closed-by-user' }
     }
-    // The host took the pane once it showed the tab; a pane it never took would open as a shell,
-    // and a refused one is the host's to take back.
-    const hostTookPane = !isAgentLaunchPaneSpawnHeld(pane.tabId, pane.leafId)
-    if (!hostTookPane || (code !== undefined && ADMISSION_REFUSAL_CODES.has(code))) {
-      closeLaunchTab(args.worktreeId, pane.tabId)
-      return { kind: 'not-started', ...(code ? { code } : {}) }
+    // Before the hold ends, so the pane never spawns a shell for a launch that did not start.
+    if (tabExists(worktreeId, tabId)) {
+      useAppStore.getState().closeTab(tabId, { recordInteraction: false })
     }
-    return { kind: 'pane-says' }
+    return { kind: 'not-started', ...(code ? { code } : {}) }
   } finally {
     releaseHold()
+  }
+}
+
+/**
+ * Mints the pane of a tab this window makes for a launch, holds its spawn and sends the launch with
+ * `spawnTrigger: 'window-pane'`. The caller makes the tab under these ids at once. The host plans
+ * and answers without starting anything; the hold ends at the answer, and the pane's own spawn
+ * then starts the planned agent at the pane's size.
+ */
+export function startPaneLaunch(args: HostAgentLaunchArgs): {
+  tabId: string
+  leafId: string
+  outcome: Promise<HostAgentLaunchOutcome>
+} {
+  const tabId = createBrowserUuid()
+  const leafId = createBrowserUuid()
+  // Before the tab exists, so its first mount already waits.
+  const releaseHold = holdAgentLaunchPaneSpawn(tabId, leafId)
+  const send = callRuntimeRpc<unknown>({ kind: 'local' }, 'agent.launchReplay', {
+    ...launchParams(args),
+    // A new click is a new operation; the pane is this click's too.
+    operationId: createAgentSessionOperationId(),
+    paneKey: makePaneKey(tabId, leafId)
+  })
+  return {
+    tabId,
+    leafId,
+    outcome: settleLaunch(args.worktreeId, tabId, send, releaseHold)
   }
 }
 
@@ -143,16 +153,7 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
   outcome: Promise<HostAgentLaunchOutcome>
 } {
   const store = useAppStore.getState()
-  const tabId = createBrowserUuid()
-  const leafId = createBrowserUuid()
-  // Before the tab exists, so its first mount already waits.
-  const releaseHold = holdAgentLaunchPaneSpawn(tabId, leafId)
-  const send = callRuntimeRpc<unknown>({ kind: 'local' }, 'agent.launchReplay', {
-    ...launchParams(args),
-    // A new click is a new operation; the pane is this click's too.
-    operationId: createAgentSessionOperationId(),
-    paneKey: makePaneKey(tabId, leafId)
-  })
+  const { tabId, leafId, outcome } = startPaneLaunch(args)
   store.createTab(args.worktreeId, args.groupId, undefined, {
     id: tabId,
     initialLeafId: leafId,
@@ -162,10 +163,14 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
     ...(args.pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
     ...(args.viewMode ? { viewMode: args.viewMode } : {})
   })
+  if (args.cwd) {
+    // Before the pane mounts: its spawn starts there, as any new agent tab's does.
+    store.queueTabInitialCwd(tabId, args.cwd)
+  }
   rememberAgentLaunchPanePrompt(tabId, args.prompt)
   seedNativeChatAppliedSessionOptions(tabId, args.agent, args.sessionOptions)
   // Why: without it an activated launch can stay hidden behind an editor.
   store.setActiveTabType('terminal', args.worktreeId)
   persistAgentLaunchTabOrder(args.worktreeId, tabId)
-  return { tabId, outcome: settleLaunch(args, { tabId, leafId }, send, releaseHold) }
+  return { tabId, outcome }
 }

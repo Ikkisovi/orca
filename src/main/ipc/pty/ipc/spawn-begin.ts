@@ -2,6 +2,7 @@ import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id
 import { resolveAgentLaunchPaneVerdict } from '../../../agent-launch/agent-launch-pane-attachment'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
 import { agentLaunchPaneLiveness } from '../pane/agent-launch-pane-evidence'
+import { applyAgentLaunchPanePlan } from './spawn-pane-launch'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import type { PtySpawnResult } from '../../../providers/types'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
@@ -61,9 +62,11 @@ export async function beginPtyIpcSpawn(
     // The window keeps a final verdict on the tab, clears a settled one, takes a withdrawn pane back.
     ctx.deps.runtime?.reportAgentLaunchPaneVerdict?.(
       { worktreeId: args.worktreeId, tabId: args.tabId, leafId: args.leafId },
-      verdict
+      verdict.kind === 'launch' ? { kind: 'proceed' } : verdict
     )
-    if (verdict.kind !== 'proceed') {
+    if (verdict.kind === 'launch') {
+      applyAgentLaunchPanePlan(ctx, verdict.launch)
+    } else if (verdict.kind !== 'proceed') {
       throw new Error(AGENT_LAUNCH_PANE_REFUSED_CODE)
     }
   }

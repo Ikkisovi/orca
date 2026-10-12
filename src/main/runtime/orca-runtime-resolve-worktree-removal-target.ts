@@ -235,6 +235,17 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     return { handle, tabId: leaf.tabId, title }
   }
 
+  /** The host's plan for an agent a window pane starts itself; nothing is spawned. */
+  async planPaneAgentTerminal(
+    selector: string,
+    opts: TerminalCreateOptions
+  ): Promise<TerminalCreateOptions> {
+    return this.resolveAgentTerminalCreateOptions(
+      await this.resolveTerminalWorkspaceLaunchScope(selector),
+      opts
+    )
+  }
+
   protected async resolveAgentTerminalCreateOptions(
     workspace: TerminalWorkspaceLaunchScope,
     opts: TerminalCreateOptions
