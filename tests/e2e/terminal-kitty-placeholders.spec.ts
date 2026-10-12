@@ -11,6 +11,10 @@ import {
 import { enableInlineImages } from './helpers/terminal-inline-image-proof'
 import { nodeTerminalCommand } from './terminal-node-command'
 
+test.use({
+  launchEnv: { ORCA_BACKGROUND_LAUNCH: '1' }
+})
+
 const MARK = '\u{10EEEE}'
 const ROWS = ['\u0305', '\u030D', '\u030E', '\u0310']
 
@@ -41,7 +45,7 @@ function imagePayload(kind: ImageKind): string {
 
 for (const acceleration of ['off', 'on'] as const) {
   for (const kind of ['cursor', 'placeholder', 'named', 'letterbox', 'transparent'] as const) {
-    test(`${acceleration}: Kitty ${kind} image paints at its intended cells`, async ({
+    test(`@headful ${acceleration}: Kitty ${kind} image paints at its intended cells`, async ({
       orcaPage
     }, testInfo) => {
       await waitForSessionReady(orcaPage)
