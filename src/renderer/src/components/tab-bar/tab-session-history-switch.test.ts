@@ -166,7 +166,7 @@ describe('resolveTabSessionHistorySubject', () => {
     ).toEqual(cliSubject)
   })
 
-  it.each(['grok', 'omp'] as const)(
+  it.each(['grok', 'omp', 'opencode', 'opencode2'] as const)(
     'finds a %s terminal tab, whose conversation a chat can take over',
     (agentType) => {
       const state = makeState({
@@ -184,7 +184,7 @@ describe('resolveTabSessionHistorySubject', () => {
     }
   )
 
-  it.each(['opencode', 'pi'] as const)(
+  it.each(['pi'] as const)(
     'skips a %s terminal tab, whose conversation no chat can take over',
     (agentType) => {
       const state = makeState({
