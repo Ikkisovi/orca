@@ -93,6 +93,7 @@ describe('browser page mount admission ends when the page leaves the store', () 
     const store = storeWithWorktree()
     const pageIds = openBackgroundTabs(store, 3)
     const state = store.getState()
+    expect(admittedCount(pageIds)).toBe(3)
 
     destroyWorktreeBrowserGuests(state.browserTabsByWorktree, state.browserPagesByWorkspace, WT)
 
