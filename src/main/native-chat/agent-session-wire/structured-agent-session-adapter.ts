@@ -42,6 +42,7 @@ import type {
   AgentSessionCancelOutcome,
   StructuredAgentSessionAdapterStop
 } from './structured-agent-session-adapter-stop'
+import type { StructuredAgentSessionStopCause } from './structured-agent-session-stop-cause'
 export type { AgentSessionCancelOutcome } from './structured-agent-session-adapter-stop'
 export type {
   StructuredAgentSessionChildEndCause,
@@ -197,6 +198,13 @@ export type StructuredAgentSessionEndedEvent = {
    *  Orca fault. Absent reads as a provider exit with nothing to add. */
   failure?: SubmissionRejectionFact
   cause: 'unexpected-exit' | 'requested-close'
+  /** The host's stop cause, when this end came from a requested close. */
+  stopCause?: StructuredAgentSessionStopCause
+  /** Execution-host observations from a requested provider close, when available. */
+  processExit?: {
+    root: 'live' | 'unverifiable' | 'exited'
+    workload: 'live' | 'unverifiable' | 'exited'
+  }
   fence: number
   acquisitionGeneration: string
   /** Host receipt of the child exit: the end time of a turn it interrupted. */
@@ -207,15 +215,15 @@ export type StructuredAgentSessionEndedEvent = {
   startupUnanswered?: true
 }
 
-/** The child a publish-first acquire handed over has now proven its start: startup facts applied.
- *  What it reports from here on is fact, not a catalog guess. */
+/** The child an acquire handed over has now proven its start: its protocol session exists and the
+ *  saved options it launched with are applied. What it reports from here on is fact. */
 export type StructuredAgentSessionStartedEvent = {
-  /** The handle supplied when the provider finishes starting. */
-  link?: AgentSessionProviderHandleLink
   type: 'started'
   sessionId: string
   fence: number
   acquisitionGeneration: string
+  /** The provider handle its protocol session answered with; absent when the acquisition held it. */
+  link?: AgentSessionProviderHandleLink
   /** What the child proved, snapshotted by the adapter from what startup already read. The host
    *  handles this inside the session's serialized step, so it must not ask the CLI. */
   reportedOptions: AgentSessionOptionsResult['current']
@@ -223,7 +231,8 @@ export type StructuredAgentSessionStartedEvent = {
   restoreSkippedOptions: readonly string[]
   /** Values the child showed it cannot run: a report naming the same value is not persisted. */
   retiredOptions?: Readonly<Record<string, string>>
-  /** What the child listed at startup, saved as its account's catalog even if no view reads it. */
+  /** What the child listed at startup, with the configured default its start resolved, saved once
+   *  as its account's catalog. Claude's default comes on its settings readback's `options-reported`. */
   catalogListing?: AgentModelCatalogLiveListing
   /** The attempt's `optionRevision()` as the read behind this report began: a pick the host took
    *  since makes it out of date. An earlier report never does, whenever the host took it. */
@@ -254,9 +263,8 @@ export type StructuredAgentSessionLifecycleEvent =
   | StructuredAgentSessionOptionsReportedEvent
   | StructuredAgentSessionOptionsSkippedEvent
 
-/** Whether the provider child behind an acquisition has proven its start. A publish-first
- *  acquire hands over a `starting` child, which the host gives no input until the `started`
- *  lifecycle event flips it. */
+/** Whether the provider child behind an acquisition has proven its start. Every acquire hands
+ *  over a `starting` child, which the host gives no input until the `started` event flips it. */
 export type StructuredAgentSessionProviderChildPhase = 'starting' | 'ready'
 
 /** The host's startup attempt (`structured-agent-session-startup-attempt`), which the host always
@@ -443,6 +451,11 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   forceCloseSession?(sessionId: string): Promise<boolean>
   /** Stops a provider child for teardown without requiring a future-resume cursor. */
   disposeSession?(sessionId: string): Promise<boolean>
+  /** Host stop cause for adapters that classify child work at exit. */
+  stopSessionWithCause?(
+    sessionId: string,
+    cause?: StructuredAgentSessionStopCause
+  ): Promise<boolean>
   /** Host acknowledgement that the proven-dead child, lease and journal owner are released. */
   acknowledgeSessionRelease?(sessionId: string): void
 }
