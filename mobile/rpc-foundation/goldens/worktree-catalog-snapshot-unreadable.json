@@ -8,56 +8,12 @@
       "admitted": "unadmitted",
       "fetched": "unfetched"
     },
-    "7fb1c6f9f3ae": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "RpcIncompatibleReplyError",
-        "message": "The host sent a reply this app could not read (worktree.ps)",
-        "isRpcDeliveryUnknown": false,
-        "code": "incompatible_reply"
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "9c5a8d7d6c68": {
-      "name": "worktree.ps#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "afterSnapshotId": {
-              "$rpc": "null"
-            },
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "b63e233c7e15": {
+    "3feb5a063551": {
       "name": "worktree.ps#1",
       "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"afterSnapshotId\":null,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"afterSnapshotId\":null,\"coarseActivity\":true,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
     },
-    "bb43258baffa": {
+    "5e2d6aff1c20": {
       "name": "worktree.ps#1",
       "ordinal": 1,
       "args": [
@@ -71,6 +27,7 @@
             "afterSnapshotId": {
               "$rpc": "null"
             },
+            "coarseActivity": true,
             "limit": 10000
           }
         },
@@ -90,6 +47,51 @@
           "ok": true
         }
       }
+    },
+    "7fb1c6f9f3ae": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (worktree.ps)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "be6c40f5d69d": {
+      "name": "worktree.ps#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "afterSnapshotId": {
+              "$rpc": "null"
+            },
+            "coarseActivity": true,
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     }
   },
   "recording": {
@@ -98,8 +100,8 @@
       {
         "id": "catalog-pending",
         "observation": {
-          "sender": ["9c5a8d7d6c68"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["be6c40f5d69d"],
+          "payloads": ["3feb5a063551"],
           "settlements": {
             "fetch": "9270aeb7d9c6"
           },
@@ -110,8 +112,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["bb43258baffa"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["5e2d6aff1c20"],
+          "payloads": ["3feb5a063551"],
           "settlements": {
             "fetch": "7fb1c6f9f3ae"
           },

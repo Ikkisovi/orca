@@ -58,6 +58,17 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 describe('areWorktreeListsEqual', () => {
+  it('compares rows from hosts that leave the preview out', () => {
+    const coarse = { ...worktree(), preview: undefined }
+
+    expect(areWorktreeListsEqual([coarse], [{ ...coarse }])).toBe(true)
+    expect(areWorktreeListsEqual([coarse], [{ ...coarse, lastOutputAt: 30_000 }])).toBe(false)
+  })
+
+  it('still detects preview changes from hosts that send one', () => {
+    expect(areWorktreeListsEqual([worktree()], [worktree({ preview: '$ claude' })])).toBe(false)
+  })
+
   it('treats cloned snapshots with the same visible fields as equal', () => {
     const first = [worktree({ agents: [agent()] })]
     const second = [worktree({ agents: [agent()] })]

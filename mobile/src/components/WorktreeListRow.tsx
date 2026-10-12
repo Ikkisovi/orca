@@ -43,7 +43,7 @@ export type WorktreeListRowItem = {
   displayName: string
   path?: string
   liveTerminalCount: number
-  preview: string
+  preview?: string
   unread: boolean
   isActive?: boolean
   linkedPR: { number: number; state: string } | null
