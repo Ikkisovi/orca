@@ -114,10 +114,15 @@ export class MobileNotificationDismissalStore {
     this.writer.write(serialize).catch(warnPersistFailed)
   }
 
+  /** Resolves once the pending write settles; its failure is already warned. */
+  flush(): Promise<void> {
+    return this.writer.waitForPendingWrite().catch(() => {})
+  }
+
   /** Committed exits only: later records save synchronously; resolves when the pending write settles. */
   close(): Promise<void> {
     this.closed = true
-    return this.writer.waitForPendingWrite().catch(() => {})
+    return this.flush()
   }
 
   liveDeliveries(prefix = ''): DeliveredNotificationRecord[] {

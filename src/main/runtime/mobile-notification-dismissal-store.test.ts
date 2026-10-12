@@ -131,7 +131,7 @@ it('retains in-memory delivery and retirement when durable writes fail', async (
     notificationSeq: 1,
     dismissedDelivery: shown
   })
-  await h.store.close()
+  await h.store.flush()
   expect(warn).toHaveBeenCalledWith(
     '[notifications] Could not persist dismissal recovery state',
     expect.anything()
@@ -152,12 +152,12 @@ it('coalesces a burst of records into writes of the latest entries, off the call
     })
   }
   expect(existsSync(file)).toBe(false)
-  await h.store.close()
+  await h.store.flush()
   const saved: unknown = JSON.parse(readFileSync(file, 'utf8'))
   expect(Array.isArray(saved) ? saved.length : 0).toBe(20)
 })
 
-it('saves records synchronously once closed, including one made while the last async write runs', async () => {
+it('saves records synchronously from the moment close() is called, ahead of the queued async write', async () => {
   const h = fixture()
   const savedIds = () =>
     new MobileNotificationDismissalStore(h.path)

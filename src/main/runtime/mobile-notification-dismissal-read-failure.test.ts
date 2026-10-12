@@ -31,7 +31,7 @@ it('preserves dismissal history after EIO', async () => {
       notificationEpoch: 'epoch',
       notificationSeq: 2
     })
-    await restarted.close()
+    await restarted.flush()
     expect(readFileSync(path, 'utf8')).toBe(before)
   } finally {
     vi.restoreAllMocks()

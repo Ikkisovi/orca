@@ -110,7 +110,7 @@ describe('prompt delivery after host recovery', () => {
       expect(events.filter((event) => event.type === 'dismiss')).toEqual([
         expect.objectContaining({ dismissedDelivery: identity })
       ])
-      await restarted.closeDismissals()
+      await restarted.flushDismissals()
       expect(
         new MobileNotificationDismissalStore(h.root).liveDeliveries(identity.notificationId)
       ).toEqual([])

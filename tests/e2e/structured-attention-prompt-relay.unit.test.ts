@@ -156,7 +156,7 @@ describe('Delayed remote prompt delivery', () => {
         })
       },
       liveDeliveries: async () => {
-        await relay.closeDismissals()
+        await relay.flushDismissals()
         return new MobileNotificationDismissalStore(relayDirectory).liveDeliveries()
       }
     }
@@ -482,7 +482,7 @@ describe('Remote prompt settlement', () => {
     await waitFor(() => expect(fixture.status).toBeTypeOf('function'))
     act(() => publishStatus())
     const live = async (kind: 'prompt' | 'completion') => {
-      await relay.closeDismissals()
+      await relay.flushDismissals()
       return new MobileNotificationDismissalStore(relayDirectory)
         .liveDeliveries()
         .filter((entry) => entry.structuredOrigin?.cause.kind === kind)

@@ -44,6 +44,7 @@ export class AtomicSnapshotWriter {
     }
     this.writeRequested = true
     this.pendingSerialize = serialize
+    // Why safe: drainWrites awaits before its finally can clear pendingWrite, so this assignment lands first.
     this.pendingWrite ??= this.drainWrites()
     return this.pendingWrite
   }
