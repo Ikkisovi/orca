@@ -175,7 +175,7 @@ export function projectStructuredAgentSessionMessages(
   const conversation =
     shownStopped.size > 0 ? withStopRowsAfterStoppedSends(ordered, shownStopped) : ordered
   return [
-    // In no turn; merged at their journal places, after the stop rows so none splits a run.
+    // In no turn; merged at their journal places after the stop rows, so a run keeps one stop row.
     ...(unsentItems.length > 0
       ? withRowsAtJournalPlaces(
           conversation,
@@ -203,7 +203,7 @@ export function projectStructuredAgentSessionMessages(
 }
 
 /** `rows` with the few `placed` rows merged in at their journal places, so a reader that draws the
- *  list as given needs no sort. A row with no journal place keeps the row before it. */
+ *  list as given needs no sort. */
 function withRowsAtJournalPlaces(
   rows: readonly NativeChatMessage[],
   placed: NativeChatMessage[]
@@ -212,11 +212,7 @@ function withRowsAtJournalPlaces(
   const merged: NativeChatMessage[] = []
   let next = 0
   for (const row of rows) {
-    while (
-      next < placed.length &&
-      row.journalPosition !== undefined &&
-      compareNativeChatTranscriptMessages(placed[next], row) < 0
-    ) {
+    while (next < placed.length && compareNativeChatTranscriptMessages(placed[next], row) < 0) {
       merged.push(placed[next++])
     }
     merged.push(row)
