@@ -19,8 +19,7 @@ const ROOT = path.resolve(import.meta.dirname, '..', '..')
 const BASELINE_PATH = 'config/main-sync-spawn-baseline.txt'
 const SCAN_DIRECTORIES = ['src/main', 'src/shared']
 const PROCESS_ADVICE = 'use runProcess or spawnProcess from @orca/process-host'
-const SECURE_ADVICE =
-  'no async secure writer exists yet; keep the synchronous one and add a baseline entry, never a plain write (it loses the Windows ACL hardening)'
+const SECURE_ADVICE = `no async secure writer exists yet; keep the synchronous one and raise this file's count in ${BASELINE_PATH} (or add a row), never a plain write (it loses the Windows ACL hardening)`
 const SECURE_WRITERS = [
   'writeSecureFile',
   'writeSecureJsonFile',
@@ -65,7 +64,7 @@ const GATED_FAMILIES = [
   { modules: ['src/main/win32-utils'], advice: { grantDirAcl: 'use grantDirAclAsync' } }
 ]
 const ADVICE = new Map(GATED_FAMILIES.flatMap((family) => Object.entries(family.advice)))
-// Asynchronous unless a call passes an object literal with `sync: true`.
+// Synchronous unless a call passes no options or a spread-free literal whose `sync` is absent or false.
 const SYNC_FLAG_SYMBOLS = new Set(['hardenSecurePath'])
 const FALLBACK_OPERATORS = new Set([ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken])
 const BASELINE_HEADER = [
@@ -99,26 +98,37 @@ export function gatedSymbolsFor(file, specifier) {
     return symbolsOf(normalizedSpecifier)
   }
   return symbolsOf(
-    moduleKey(path.posix.normalize(path.posix.join(path.posix.dirname(file), normalizedSpecifier)))
+    moduleKey(
+      path.posix.normalize(
+        path.posix.join(path.posix.dirname(normalized(file)), normalizedSpecifier)
+      )
+    )
   )
 }
 
-function passesSyncFlag(callee) {
+function isAsyncOnlyCall(callee) {
   const call = callee.parent
+  if (!ts.isCallExpression(call) || call.expression !== callee) {
+    return false
+  }
+  const options = unwrap(call.arguments[1])
   return (
-    ts.isCallExpression(call) &&
-    call.expression === callee &&
-    call.arguments.some(
-      (argument) =>
-        ts.isObjectLiteralExpression(argument) &&
-        argument.properties.some(
-          (property) =>
-            ts.isPropertyAssignment(property) &&
-            (ts.isIdentifier(property.name) ? property.name.text : literalString(property.name)) ===
-              'sync' &&
-            property.initializer.kind === ts.SyntaxKind.TrueKeyword
+    !options ||
+    (ts.isObjectLiteralExpression(options) &&
+      options.properties.every((property) => {
+        if (ts.isSpreadAssignment(property)) {
+          return false
+        }
+        const name = ts.isIdentifier(property.name)
+          ? property.name.text
+          : literalString(property.name)
+        return (
+          name !== null &&
+          (name !== 'sync' ||
+            (ts.isPropertyAssignment(property) &&
+              unwrap(property.initializer).kind === ts.SyntaxKind.FalseKeyword))
         )
-    )
+      }))
   )
 }
 
@@ -148,6 +158,7 @@ function isValueReference(node) {
  * Every value reference to a gated function counts (call, hand-off, alias initializer, each alias
  * use), plus each re-export and a gated module's own references; imports alone count nothing.
  * File-wide, not scope-aware; computed specifiers and member names are not resolved.
+ * Counted by reference only: not traced through non-const holders or the file's own wrappers.
  */
 export function collectSyncLaunchUses(file, contents) {
   const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, true)
@@ -200,7 +211,7 @@ export function collectSyncLaunchUses(file, contents) {
     return null
   }
   function recordUse(name, node) {
-    if (SYNC_FLAG_SYMBOLS.has(name) && !passesSyncFlag(node)) {
+    if (SYNC_FLAG_SYMBOLS.has(name) && isAsyncOnlyCall(node)) {
       return
     }
     used.add(name)
@@ -246,7 +257,7 @@ export function collectSyncLaunchUses(file, contents) {
     }
   }
   function visit(node) {
-    if (ts.isTypeNode(node)) {
+    if (ts.isTypeNode(node) && !ts.isExpressionWithTypeArguments(node)) {
       return
     }
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {

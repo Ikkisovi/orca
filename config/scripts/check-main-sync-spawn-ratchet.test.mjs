@@ -6,6 +6,7 @@ import {
   adviceFor,
   collectSyncLaunchUses,
   countSyncSpawnUses,
+  gatedSymbolsFor,
   main,
   prune
 } from './check-main-sync-spawn-ratchet.mjs'
@@ -80,6 +81,26 @@ describe('main sync-spawn ratchet', () => {
       "import * as store from '..\\\\shared\\\\bounded-secure-json-file'\nstore.writeSecureJsonFileWithinLimit(p, v, 1)",
       1,
       ['writeSecureJsonFileWithinLimit']
+    ],
+    [
+      "const { execSync } = require('child_process')\nconst run = execSync\nrun('a')",
+      2,
+      ['execSync']
+    ],
+    [
+      "function f() { const run = cp.execSync; run('a') }\nconst cp = require('child_process')",
+      2,
+      ['execSync']
+    ],
+    [
+      "import { execFileSync } from 'child_process'\nclass A extends mixin(execFileSync) {}",
+      1,
+      ['execFileSync']
+    ],
+    [
+      "import { runProcessSync } from '@orca/process-host'\nconst run = runProcessSync<string>",
+      1,
+      ['runProcessSync']
     ]
   ])('counts %s', (source, count, symbols) => {
     expect(uses(source)).toEqual({ count, symbols })
@@ -131,15 +152,19 @@ describe('main sync-spawn ratchet', () => {
     expect(uses(source)).toEqual({ count: 1, symbols: [symbol] })
   })
 
-  it('gates hardenSecurePath only when a call passes sync: true', () => {
+  it('counts hardenSecurePath unless the call is visibly async', () => {
     const imported = "import { hardenSecurePath } from '../shared/secure-file'\n"
-    expect(uses(`${imported}hardenSecurePath(p, { isDirectory: true, sync: true })`).count).toBe(1)
-    expect(uses(`${imported}hardenSecurePath(p, { isDirectory: true, 'sync': true })`).count).toBe(
-      1
-    )
-    expect(uses(`${imported}hardenSecurePath(p, { isDirectory: true })`).count).toBe(0)
-    expect(uses(`${imported}hardenSecurePath(p, { sync: false })`).count).toBe(0)
-    expect(uses(`${imported}tasks.map(hardenSecurePath)`).count).toBe(0)
+    const count = (call) => uses(`${imported}${call}`).count
+    expect(count('hardenSecurePath(p, { isDirectory: true, sync: true })')).toBe(1)
+    expect(count("hardenSecurePath(p, { isDirectory: true, 'sync': true })")).toBe(1)
+    expect(count('hardenSecurePath(p, options)')).toBe(1)
+    expect(count('hardenSecurePath(p, { ...base, isDirectory: true })')).toBe(1)
+    expect(count('hardenSecurePath(p, { isDirectory: true, sync })')).toBe(1)
+    expect(count('hardenSecurePath(p, { sync: true } as const)')).toBe(1)
+    expect(count('tasks.map(hardenSecurePath)')).toBe(1)
+    expect(count('hardenSecurePath(p, { isDirectory: true })')).toBe(0)
+    expect(count('hardenSecurePath(p, { isDirectory: true, sync: false })')).toBe(0)
+    expect(count('hardenSecurePath(p)')).toBe(0)
     expect(
       uses("import * as sf from '../shared/secure-file'\nsf.hardenSecurePath(p, { sync: true })")
     ).toEqual({ count: 1, symbols: ['hardenSecurePath'] })
@@ -170,6 +195,10 @@ describe('main sync-spawn ratchet', () => {
       count: 1,
       symbols: ['writeSecureFile']
     })
+  })
+
+  it('resolves backslash paths in both the importing file and the specifier', () => {
+    expect([...(gatedSymbolsFor('src\\main\\foo\\x.ts', '..\\wsl') ?? [])]).toContain('getWslHome')
   })
 
   it('fails closed on source it cannot parse', () => {
@@ -203,7 +232,9 @@ describe('main sync-spawn ratchet', () => {
     expect(adviceFor(['execFileSync', 'runProcessSync'])).toBe(
       'execFileSync, runProcessSync: use runProcess or spawnProcess from @orca/process-host.'
     )
-    expect(adviceFor(['writeSecureFile'])).toContain('no async secure writer exists yet')
+    expect(adviceFor(['writeSecureFile'])).toContain(
+      "no async secure writer exists yet; keep the synchronous one and raise this file's count in config/main-sync-spawn-baseline.txt"
+    )
     expect(adviceFor(['restrictWindowsPathSync'])).toContain('never a plain write')
     expect(adviceFor(['gitExecFileSync', 'grantDirAcl'])).toBe(
       'gitExecFileSync: use gitExecFileAsync. grantDirAcl: use grantDirAclAsync.'
@@ -237,14 +268,17 @@ describe('main sync-spawn ratchet', () => {
       'src/main/store.ts': write,
       'src/main/clean.ts': 'export const done = true\n',
       'src/main/new.ts': write,
-      [BASELINE]: '# old header\n3 src/main/store.ts # tracked in #26754\n1 src/main/clean.ts\n'
+      'src/main/grown.ts': `${write}writeSecureFile(c, d)\n`,
+      [BASELINE]:
+        '# old header\n3 src/main/store.ts # tracked in #26754\n1 src/main/clean.ts\n1 src/main/grown.ts\n'
     })
     const error = captureErrors()
     expect(main(root)).toBe(1)
     const lines = error.mock.calls.map(([line]) => line)
-    expect(lines[0]).toContain('src/main/new.ts::1 synchronous launch use(s), baseline allows 0.')
-    expect(lines[0]).toContain('writeSecureFile: no async secure writer exists yet')
-    expect(lines.slice(1)).toEqual([
+    expect(lines[0]).toContain('src/main/grown.ts::2 synchronous launch use(s), baseline allows 1.')
+    expect(lines[1]).toContain('src/main/new.ts::1 synchronous launch use(s), baseline allows 0.')
+    expect(lines[1]).toContain('writeSecureFile: no async secure writer exists yet')
+    expect(lines.slice(2)).toEqual([
       '::error file=src/main/clean.ts::0 synchronous launch use(s), baseline still allows 1. Run: pnpm check:main-sync-spawn-ratchet --prune',
       '::error file=src/main/store.ts::1 synchronous launch use(s), baseline still allows 3. Run: pnpm check:main-sync-spawn-ratchet --prune'
     ])
@@ -252,11 +286,14 @@ describe('main sync-spawn ratchet', () => {
     const pruned = readFileSync(path.join(root, BASELINE), 'utf8')
     expect(pruned).toContain('counts may only go DOWN')
     expect(pruned.split('\n').filter((line) => line && !line.startsWith('#'))).toEqual([
+      '1 src/main/grown.ts',
       '1 src/main/store.ts # tracked in #26754'
     ])
     error.mockClear()
     expect(main(root)).toBe(1)
-    expect(error.mock.calls).toHaveLength(1)
-    expect(error.mock.calls[0][0]).toContain('src/main/new.ts::1')
+    expect(error.mock.calls.map(([line]) => line.split('::')[1])).toEqual([
+      'error file=src/main/grown.ts',
+      'error file=src/main/new.ts'
+    ])
   })
 })
