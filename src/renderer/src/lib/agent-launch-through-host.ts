@@ -54,8 +54,9 @@ export type HostAgentLaunchOutcome =
   | { kind: 'started' }
   /** The user closed the tab while it started, and with it the launch: nothing more to say. */
   | { kind: 'closed-by-user' }
-  /** Nothing started; this window closed the tab and says why. */
-  | { kind: 'not-started'; code?: string; message?: string }
+  /** The host refused: an AI button's tab is closed and this window says why. TEMPORARY parity
+   *  (follow-up 4): a "+" tab stays, and its pane runs the window's own queued launch as before. */
+  | { kind: 'not-started'; code?: string }
 
 function tabExists(worktreeId: string, tabId: string): boolean {
   return (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)
@@ -94,25 +95,22 @@ async function settleLaunch(
   worktreeId: string,
   tabId: string,
   send: Promise<unknown>,
-  releaseHold: () => void
+  releaseHold: () => void,
+  keepsTab: boolean
 ): Promise<HostAgentLaunchOutcome> {
   try {
     await send
     return { kind: 'started' }
   } catch (error) {
-    const refusal = error instanceof RuntimeRpcCallError ? error : null
-    const code = refusal?.code
+    const code = error instanceof RuntimeRpcCallError ? error.code : undefined
     if (code === AGENT_LAUNCH_TAB_CLOSED_CODE) {
       return { kind: 'closed-by-user' }
     }
     // Before the hold ends, so the pane never spawns a shell for a launch that did not start.
-    if (tabExists(worktreeId, tabId)) {
+    if (!keepsTab && tabExists(worktreeId, tabId)) {
       useAppStore.getState().closeTab(tabId, { recordInteraction: false })
     }
-    return {
-      kind: 'not-started',
-      ...(refusal ? { code: refusal.code, message: refusal.message } : {})
-    }
+    return { kind: 'not-started', ...(code ? { code } : {}) }
   } finally {
     releaseHold()
   }
@@ -142,7 +140,7 @@ export function startPaneLaunch(args: HostAgentLaunchArgs): {
   return {
     tabId,
     leafId,
-    outcome: settleLaunch(args.worktreeId, tabId, send, releaseHold)
+    outcome: settleLaunch(args.worktreeId, tabId, send, releaseHold, args.windowRules === true)
   }
 }
 

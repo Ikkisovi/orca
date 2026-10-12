@@ -165,7 +165,7 @@ describe('a desktop launch through the host', () => {
 
     reply.reject(rpcError(code))
 
-    await expect(outcome).resolves.toEqual({ kind: 'not-started', code, message: code })
+    await expect(outcome).resolves.toEqual({ kind: 'not-started', code })
     unsubscribe()
     expect(launchTab(tabId)).toBeUndefined()
     expect(heldAtClose).toBe(true)
@@ -186,6 +186,22 @@ describe('a desktop launch through the host', () => {
       prompt: { text: 'fix it', delivery: 'draft' },
       spawnTrigger: 'window-pane'
     })
+  })
+
+  // TEMPORARY parity (follow-up 4): as before C2, the pane then runs the window's own queued launch.
+  it("keeps a refused '+' tab and lets its pane spawn", async () => {
+    callRuntimeRpc.mockRejectedValueOnce(rpcError('project_runtime_repair_required'))
+    const { tabId, leafId, outcome } = startPaneLaunch({
+      agent: 'claude',
+      worktreeId: WT,
+      prompt: '',
+      windowRules: true
+    })
+    store.getState().createTab(WT, undefined, undefined, { id: tabId, initialLeafId: leafId })
+
+    await expect(outcome).resolves.toMatchObject({ kind: 'not-started' })
+    expect(launchTab(tabId)).toBeDefined()
+    expect(agentLaunchPaneSpawnHold(tabId, leafId)).toBeNull()
   })
 
   // Why: the close was the user's own, as on the phone's "+".
