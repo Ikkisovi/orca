@@ -3,7 +3,7 @@
 
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
-import { collectAiVaultTitleRequests } from '@/lib/ai-vault-tab-title-requests'
+import { collectAgentPaneConversations } from '@/lib/ai-vault-tab-title-requests'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultListArgs,
@@ -15,7 +15,10 @@ import {
   parseExecutionHostId,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
-import type { AgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import {
+  adoptsCliConversations,
+  type CliConversationAdoptingAgent
+} from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { agentForksConversations } from '../../../../shared/agent-resume-argv'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { resolveAiVaultSessionSurfaceSwitchTargets } from '../right-sidebar/ai-vault-session-surface-switch'
@@ -39,7 +42,7 @@ export type TabSessionHistorySubject = {
   | { kind: 'chat'; sessionId: string }
   | {
       kind: 'cli'
-      agent: AgentSessionHandleProvider
+      agent: CliConversationAdoptingAgent
       providerSessionId: string
     }
 )
@@ -87,17 +90,17 @@ export function resolveTabSessionHistorySubject(
         : null
     return target ? { ...target, kind: 'chat', sessionId: args.structuredSessionId } : null
   }
-  // The same pane-to-conversation mapping tab titles use: live agent, then sleeping, then retained.
-  const titleRequest = collectAiVaultTitleRequests(state).find(
+  // The same pane-to-conversation mapping tab titles use, for the agents a chat can take over.
+  const conversation = collectAgentPaneConversations(state, adoptsCliConversations).find(
     (candidate) => candidate.tabId === args.tab.id
   )
-  const target = titleRequest ? workspace(titleRequest.worktreeId, 'cli') : null
-  return titleRequest && target
+  const target = conversation ? workspace(conversation.worktreeId, 'cli') : null
+  return conversation && target
     ? {
         ...target,
         kind: 'cli',
-        agent: titleRequest.agent,
-        providerSessionId: titleRequest.providerSession.id
+        agent: conversation.agent,
+        providerSessionId: conversation.providerSession.id
       }
     : null
 }

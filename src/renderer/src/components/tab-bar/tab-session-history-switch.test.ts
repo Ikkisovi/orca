@@ -166,6 +166,42 @@ describe('resolveTabSessionHistorySubject', () => {
     ).toEqual(cliSubject)
   })
 
+  it.each(['grok', 'omp'] as const)(
+    'finds a %s terminal tab, whose conversation a chat can take over',
+    (agentType) => {
+      const state = makeState({
+        'term-1:leaf-1': makeAgentStatusEntry({
+          agentType,
+          paneKey: 'term-1:leaf-1',
+          tabId: 'term-1',
+          worktreeId: WORKTREE_ID,
+          providerSession: { key: 'session_id', id: `${agentType}-session-1` }
+        })
+      })
+      expect(
+        resolveTabSessionHistorySubject(state, { tab: { id: 'term-1', worktreeId: WORKTREE_ID } })
+      ).toEqual({ ...cliSubject, agent: agentType, providerSessionId: `${agentType}-session-1` })
+    }
+  )
+
+  it.each(['opencode', 'pi'] as const)(
+    'skips a %s terminal tab, whose conversation no chat can take over',
+    (agentType) => {
+      const state = makeState({
+        'term-1:leaf-1': makeAgentStatusEntry({
+          agentType,
+          paneKey: 'term-1:leaf-1',
+          tabId: 'term-1',
+          worktreeId: WORKTREE_ID,
+          providerSession: { key: 'session_id', id: `${agentType}-session-1` }
+        })
+      })
+      expect(
+        resolveTabSessionHistorySubject(state, { tab: { id: 'term-1', worktreeId: WORKTREE_ID } })
+      ).toBeNull()
+    }
+  )
+
   it('looks nothing up over SSH, where neither move is ever offered', () => {
     const state = makeState(liveClaudeEntry, { connectionId: 'dev-box' })
     expect(
