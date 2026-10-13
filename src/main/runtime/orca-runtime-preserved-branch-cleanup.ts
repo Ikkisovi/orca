@@ -105,6 +105,7 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
   protected readonly buildAgentHookPtyEnv: (() => Record<string, string>) | null
 
   protected readonly getDesktopWindowStatusFn: () => RuntimeDesktopWindowStatus
+  protected readonly getDesktopWindowVisibleFn: (() => boolean) | undefined
 
   protected readonly prepareAiVaultSessionResumeFn:
     | ((args: AiVaultPrepareSessionResumeArgs) => Promise<AiVaultPrepareSessionResumeResult>)

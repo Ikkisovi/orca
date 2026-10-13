@@ -5,6 +5,7 @@ vi.mock('electron', () => ({ app: { dock: { hide: vi.fn() }, setActivationPolicy
 
 const {
   applyBackgroundActivationPolicy,
+  restoreDesktopActivationForUserRequest,
   isBackgroundLaunch,
   isWindowlessLaunch,
   showWindowWithoutStealingFocus
@@ -39,6 +40,29 @@ describe('isBackgroundLaunch', () => {
   it('lets native-focus specs opt back into the foreground', () => {
     expect(isBackgroundLaunch({ ORCA_E2E_HEADFUL: '1', ORCA_E2E_FOREGROUND: '1' })).toBe(false)
     expect(isWindowlessLaunch({ ORCA_E2E_HEADLESS: '1', ORCA_E2E_FOREGROUND: '1' })).toBe(false)
+  })
+})
+
+describe('recovering a background desktop', () => {
+  it('restores the Dock and normal visibility policy after an explicit user reopen', () => {
+    const app = { dock: { hide: vi.fn(), show: vi.fn() }, setActivationPolicy: vi.fn() }
+    const env = { ORCA_BACKGROUND_LAUNCH: '1' }
+    expect(restoreDesktopActivationForUserRequest({ app, env, platform: 'darwin' })).toBe(true)
+    expect(app.setActivationPolicy).toHaveBeenCalledWith('regular')
+    expect(app.dock.show).toHaveBeenCalledOnce()
+    expect(isBackgroundLaunch(env)).toBe(false)
+  })
+
+  it.each([
+    { ORCA_BACKGROUND_LAUNCH: '1', ORCA_E2E_USER_DATA_DIR: '/isolated/test' },
+    { ORCA_BACKGROUND_LAUNCH: '1', ORCA_E2E_HEADLESS: '1' },
+    { ORCA_BACKGROUND_LAUNCH: '1', ORCA_E2E_HEADFUL: '1' }
+  ])('keeps automated test windows hidden during activation', (env) => {
+    const app = { dock: { hide: vi.fn(), show: vi.fn() }, setActivationPolicy: vi.fn() }
+    expect(restoreDesktopActivationForUserRequest({ app, env, platform: 'darwin' })).toBe(false)
+    expect(app.setActivationPolicy).not.toHaveBeenCalled()
+    expect(app.dock.show).not.toHaveBeenCalled()
+    expect(isWindowlessLaunch(env)).toBe(true)
   })
 })
 

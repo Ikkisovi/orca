@@ -6,7 +6,7 @@ import {
   type HostUsageSummary
 } from '../../../../shared/host-usage-summary'
 
-export function useHostUsage(host: string, days: number) {
+export function useHostUsage(host: string, days: number, sessionOffset = 0, sessionSearch = '') {
   const plugins = usePluginPanelsStore((state) => state.plugins)
   const fetchPlugins = usePluginPanelsStore((state) => state.fetchPlugins)
   const plugin = plugins.find((entry) => entry.pluginKey === HOST_USAGE_PLUGIN_KEY)
@@ -16,14 +16,15 @@ export function useHostUsage(host: string, days: number) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const generation = useRef(0)
+  const snapshotScope = useRef({ host, days })
   const invoke = useCallback(
     (commandId: string) =>
       window.api.plugins.invokeCommand({
         pluginKey: HOST_USAGE_PLUGIN_KEY,
         commandId,
-        args: { host, days }
+        args: { host, days, sessionOffset, sessionSearch }
       }),
-    [host, days]
+    [host, days, sessionOffset, sessionSearch]
   )
 
   useEffect(() => {
@@ -59,7 +60,10 @@ export function useHostUsage(host: string, days: number) {
         inFlight = false
       }
     }
-    setSnapshot(null)
+    if (snapshotScope.current.host !== host || snapshotScope.current.days !== days) {
+      setSnapshot(null)
+      snapshotScope.current = { host, days }
+    }
     setBusy(false)
     setError(null)
     void reload()
@@ -71,7 +75,7 @@ export function useHostUsage(host: string, days: number) {
       generation.current = current + 1
       clearInterval(timer)
     }
-  }, [enabled, compatible, invoke])
+  }, [enabled, compatible, invoke, host, days])
 
   const act = async (commandId: string) => {
     const current = generation.current
@@ -100,7 +104,6 @@ export function useHostUsage(host: string, days: number) {
     enabled,
     compatible,
     scan: () => act('usage-scan'),
-    reload: () => act('usage-summary'),
-    open: () => act('usage-open')
+    reload: () => act('usage-summary')
   }
 }

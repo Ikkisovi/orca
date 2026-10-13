@@ -18,6 +18,20 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
+  it('reports actual window visibility independently of a ready graph', () => {
+    let visible = false
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getDesktopWindowVisible: () => visible
+    })
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.markGraphReady(TEST_WINDOW_ID)
+    expect(runtime.getStatus().graphStatus).toBe('ready')
+    expect(runtime.getStatus().desktopWindowVisible).toBe(false)
+    visible = true
+    expect(runtime.getStatus().desktopWindowVisible).toBe(true)
+    expect(createRuntime().getStatus().desktopWindowVisible).toBeUndefined()
+  })
+
   it('claims the first window as authoritative and ignores later windows', () => {
     const runtime = createRuntime()
 

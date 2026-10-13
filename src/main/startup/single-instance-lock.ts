@@ -1,5 +1,6 @@
 import type { App } from 'electron'
 import { argvRequestsServeMode } from './serve-mode-argv'
+import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import { writeStartupDiagnosticLine, type StartupDiagnosticSink } from './startup-diagnostics'
 
 export const SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE =
@@ -39,12 +40,19 @@ export function shouldActivateDesktopForSecondInstance(argv: readonly string[] =
  */
 export function acquireSingleInstanceLock(
   app: App,
-  onSecondInstance: (argv: readonly string[]) => void
+  onSecondInstance: (argv: readonly string[], launch?: { backgroundLaunch: boolean }) => void
 ): boolean {
-  if (!app.requestSingleInstanceLock()) {
+  if (!app.requestSingleInstanceLock({ backgroundLaunch: isBackgroundLaunch() })) {
     return false
   }
-  app.on('second-instance', (_event, argv) => onSecondInstance(argv))
+  app.on('second-instance', (_event, argv, _cwd, data) => {
+    const backgroundLaunch =
+      typeof data === 'object' &&
+      data !== null &&
+      'backgroundLaunch' in data &&
+      data.backgroundLaunch === true
+    onSecondInstance(argv, { backgroundLaunch })
+  })
   return true
 }
 

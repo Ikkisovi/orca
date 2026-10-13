@@ -12,8 +12,30 @@ import { app as electronApp, type BrowserWindow } from 'electron'
  */
 
 type ActivationPolicyApp = {
-  dock?: { hide: () => void }
+  dock?: { hide: () => void; show?: () => Promise<void> | void }
   setActivationPolicy: (policy: 'accessory' | 'prohibited' | 'regular') => void
+}
+
+/** A normal Dock/reopen request can recover a hidden production desktop, never a test profile. */
+export function restoreDesktopActivationForUserRequest(
+  options: { app?: ActivationPolicyApp; env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform } = {}
+): boolean {
+  const env = options.env ?? process.env
+  if (
+    env.ORCA_BACKGROUND_LAUNCH !== '1' ||
+    env.ORCA_E2E_USER_DATA_DIR ||
+    env.ORCA_E2E_HEADLESS === '1' ||
+    env.ORCA_E2E_HEADFUL === '1'
+  ) {
+    return false
+  }
+  const app = options.app ?? electronApp
+  if ((options.platform ?? process.platform) === 'darwin') {
+    app.setActivationPolicy('regular')
+    void app.dock?.show?.()
+  }
+  delete env.ORCA_BACKGROUND_LAUNCH
+  return true
 }
 
 /** Reads ORCA_BACKGROUND_LAUNCH, ORCA_E2E_FOREGROUND, ORCA_E2E_HEADLESS, ORCA_E2E_HEADFUL. */

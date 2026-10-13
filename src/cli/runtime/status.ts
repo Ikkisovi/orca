@@ -48,6 +48,9 @@ export async function getCliStatus(
       app: {
         running: true,
         pid: metadata.pid,
+        ...(typeof response.result.desktopWindowVisible === 'boolean'
+          ? { desktopWindowVisible: response.result.desktopWindowVisible }
+          : {}),
         ...(desktopWindowStatus ? { desktopWindowStatus } : {})
       },
       runtime: {

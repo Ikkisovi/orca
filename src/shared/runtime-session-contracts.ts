@@ -70,6 +70,7 @@ export type RuntimeStatus = {
   graphStatus: RuntimeGraphStatus
   authoritativeWindowId: number | null
   desktopWindowStatus?: RuntimeDesktopWindowStatus
+  desktopWindowVisible?: boolean
   liveTabCount: number
   liveLeafCount: number
   runtimeProtocolVersion?: number
@@ -113,6 +114,7 @@ export type CliStatusResult = {
     running: boolean
     pid: number | null
     desktopWindowStatus?: RuntimeDesktopWindowStatus
+    desktopWindowVisible?: boolean
   }
   runtime: {
     state: CliRuntimeState

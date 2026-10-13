@@ -24,6 +24,33 @@ export const hostUsageSummarySchema = z.object({
   summary: totals.extend({ sessions: count }),
   providers: z.array(totals.extend({ key: text })).max(32),
   daily: z.array(totals.extend({ key: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })),
+  models: z
+    .array(totals.extend({ key: text }))
+    .max(4096)
+    .default([]),
+  projects: z
+    .array(totals.extend({ key: text }))
+    .max(16384)
+    .default([]),
+  recent: z
+    .array(
+      z.object({
+        id: text,
+        host: text,
+        provider: text,
+        model: text,
+        project: text,
+        firstAt: text,
+        lastAt: text,
+        turns: count,
+        total: count
+      })
+    )
+    .max(100)
+    .default([]),
+  sessionPagination: z
+    .object({ offset: count, limit: count.positive().max(100), total: count })
+    .default({ offset: 0, limit: 50, total: 0 }),
   hosts: z
     .array(
       z.object({

@@ -24,6 +24,9 @@ export function projectRemoteAppStatus(status: RuntimeStatus): CliStatusResult['
   return {
     running: desktopWindowStatus === 'available',
     pid: null,
+    ...(typeof status.desktopWindowVisible === 'boolean'
+      ? { desktopWindowVisible: status.desktopWindowVisible }
+      : {}),
     ...(desktopWindowStatus ? { desktopWindowStatus } : {})
   }
 }

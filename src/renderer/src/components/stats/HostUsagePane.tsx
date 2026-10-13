@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ChevronDown, Monitor, RefreshCw, Server, Sparkles } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
@@ -10,37 +10,25 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { StatCard } from './StatCard'
+import { HostUsageCards } from './HostUsageCards'
 import { HostUsageDailyChart } from './HostUsageDailyChart'
-import { formatTokens, formatCost, formatUpdatedAt } from './usage-formatters'
+import { HostUsageRankings } from './HostUsageRankings'
+import { HostUsageSessions } from './HostUsageSessions'
+import { formatTokens, formatCost } from './usage-formatters'
 import { useHostUsage } from './use-host-usage'
 import { translate } from '@/i18n/i18n'
-
-function stateLabel(state: string): string {
-  switch (state) {
-    case 'ready':
-      return translate('auto.components.stats.HostUsagePane.ready', 'Ready')
-    case 'scanning':
-      return translate('auto.components.stats.HostUsagePane.scanning', 'Scanning')
-    case 'partial':
-      return translate('auto.components.stats.HostUsagePane.partial', 'Partial data')
-    case 'error':
-      return translate(
-        'auto.components.stats.HostUsagePane.error',
-        'Scan failed — previous data retained'
-      )
-    case 'needs-ssh':
-      return translate('auto.components.stats.HostUsagePane.needsSsh', 'SSH connection needed')
-    default:
-      return translate('auto.components.stats.HostUsagePane.unscanned', 'Not scanned yet')
-  }
-}
 
 export function HostUsagePane(): React.JSX.Element {
   const [host, setHost] = useState('all')
   const [days, setDays] = useState(30)
-  const { snapshot, enabled, compatible, error, busy, scan, reload, open } = useHostUsage(
+  const [sessionOffset, setSessionOffset] = useState(0)
+  const [sessionSearch, setSessionSearch] = useState('')
+  const details = useRef<HTMLDivElement>(null)
+  const { snapshot, enabled, compatible, error, busy, scan, reload } = useHostUsage(
     host,
-    days
+    days,
+    sessionOffset,
+    sessionSearch
   )
   const allLabel = translate('auto.components.stats.HostUsagePane.allHosts', 'All hosts')
   const selected = snapshot?.hosts.find((entry) => entry.key === host)?.name ?? allLabel
@@ -80,7 +68,13 @@ export function HostUsagePane(): React.JSX.Element {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuRadioGroup value={host} onValueChange={setHost}>
+                <DropdownMenuRadioGroup
+                  value={host}
+                  onValueChange={(value) => {
+                    setHost(value)
+                    setSessionOffset(0)
+                  }}
+                >
                   <DropdownMenuRadioItem value="all">{allLabel}</DropdownMenuRadioItem>
                   {snapshot?.hosts.map((entry) => (
                     <DropdownMenuRadioItem key={entry.key} value={entry.key}>
@@ -100,7 +94,10 @@ export function HostUsagePane(): React.JSX.Element {
               <DropdownMenuContent align="end">
                 <DropdownMenuRadioGroup
                   value={String(days)}
-                  onValueChange={(value) => setDays(Number(value))}
+                  onValueChange={(value) => {
+                    setDays(Number(value))
+                    setSessionOffset(0)
+                  }}
                 >
                   {rangeOptions.map((option) => (
                     <DropdownMenuRadioItem key={option.value} value={option.value}>
@@ -164,48 +161,7 @@ export function HostUsagePane(): React.JSX.Element {
               </p>
             )}
             <HostUsageDailyChart daily={snapshot.daily} />
-            <div className="grid gap-3 xl:grid-cols-2">
-              {hosts.map((entry) => (
-                <section
-                  key={entry.key}
-                  className="space-y-2 rounded-lg border border-border/60 bg-card/40 p-4"
-                  data-testid="usage-host-card"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h4 className="truncate text-sm font-semibold text-foreground">
-                        {entry.name}
-                      </h4>
-                      <p className="text-xs text-muted-foreground">
-                        {entry.kind === 'local'
-                          ? translate('auto.components.stats.HostUsagePane.local', 'This machine')
-                          : entry.aliases.join(' / ')}
-                      </p>
-                    </div>
-                    <Badge variant="outline">{stateLabel(entry.state)}</Badge>
-                  </div>
-                  <p className="text-sm text-foreground">
-                    {entry.summary ? formatTokens(entry.summary.total) : '—'} tokens
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatUpdatedAt(entry.lastSuccessAt)}
-                  </p>
-                  {entry.error && (
-                    <p role="status" className="text-xs text-destructive">
-                      {entry.error}
-                    </p>
-                  )}
-                  {entry.providers.map((provider) =>
-                    provider.state === 'error' ? (
-                      <p key={provider.provider} role="status" className="text-xs text-destructive">
-                        {provider.provider}: {provider.error} ·{' '}
-                        {formatUpdatedAt(provider.lastGoodAt)}
-                      </p>
-                    ) : null
-                  )}
-                </section>
-              ))}
-            </div>
+            <HostUsageCards hosts={hosts} />
             <div className="flex flex-wrap gap-2">
               {snapshot.providers.map((provider) => (
                 <Badge key={provider.key} variant="outline">
@@ -257,13 +213,41 @@ export function HostUsagePane(): React.JSX.Element {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => void open()}
-            disabled={!enabled || !compatible || busy}
+            onClick={() => details.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            disabled={!snapshot}
           >
             {translate('auto.components.stats.HostUsagePane.details', 'Projects & sessions')}
           </Button>
         </div>
       </section>
+      {snapshot && (
+        <div ref={details} className="space-y-4" data-testid="host-usage-details">
+          <div key={`${host}:${days}`} className="grid gap-4 xl:grid-cols-2">
+            <HostUsageRankings
+              title={translate('auto.components.stats.HostUsageDetails.models', 'Model ranking')}
+              rows={snapshot.models}
+              total={snapshot.summary.total}
+            />
+            <HostUsageRankings
+              title={translate(
+                'auto.components.stats.HostUsageDetails.projects',
+                'Project ranking'
+              )}
+              rows={snapshot.projects}
+              total={snapshot.summary.total}
+            />
+          </div>
+          <HostUsageSessions
+            snapshot={snapshot}
+            search={sessionSearch}
+            onSearch={(value) => {
+              setSessionSearch(value)
+              setSessionOffset(0)
+            }}
+            onOffset={setSessionOffset}
+          />
+        </div>
+      )}
     </div>
   )
 }

@@ -3,19 +3,46 @@
   "publisher": "ikkisovi",
   "id": "host-usage",
   "name": "Kai's usage — local & remote",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Scan and monitor Codex, Claude, OpenCode, Pi and DSH logs across the local machine and Orca SSH hosts. Uses a trusted Node worker and existing SSH credentials. Usage metadata stays on your machines.",
-  "engines": { "orca": ">=1.4.221" },
+  "engines": {
+    "orca": ">=1.4.221"
+  },
   "pluginApi": 1,
   "main": "main.mjs",
   "contributes": {
-    "panels": [{ "id": "usage", "title": "Kai's usage", "icon": "chart-column", "entry": "panel.html" }],
-    "commands": [
-      { "id": "usage-open", "title": "Usage: Open local & remote dashboard", "context": "global" },
-      { "id": "usage-scan", "title": "Usage: Scan local & remote hosts", "context": "global" },
-      { "id": "usage-summary", "title": "Usage: Read local & remote summary", "context": "global" }
+    "panels": [
+      {
+        "id": "usage",
+        "title": "Kai's usage",
+        "icon": "chart-column",
+        "entry": "panel.html"
+      }
     ],
-    "keybindings": [{ "command": "usage-open", "key": "Mod+Alt+U", "when": "global" }]
+    "commands": [
+      {
+        "id": "usage-open",
+        "title": "Usage: Open local & remote dashboard",
+        "context": "global"
+      },
+      {
+        "id": "usage-scan",
+        "title": "Usage: Scan local & remote hosts",
+        "context": "global"
+      },
+      {
+        "id": "usage-summary",
+        "title": "Usage: Read local & remote summary",
+        "context": "global"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "usage-open",
+        "key": "Mod+Alt+U",
+        "when": "global"
+      }
+    ]
   },
   "capabilities": []
 }

@@ -74,7 +74,17 @@ describe('acquireSingleInstanceLock', () => {
     registered?.({}, ['/opt/orca/orca-linux.AppImage', '--serve'], '/home/orca')
 
     expect(onSecondInstance).toHaveBeenCalledTimes(1)
-    expect(onSecondInstance).toHaveBeenCalledWith(['/opt/orca/orca-linux.AppImage', '--serve'])
+    expect(onSecondInstance).toHaveBeenCalledWith(['/opt/orca/orca-linux.AppImage', '--serve'], {
+      backgroundLaunch: false
+    })
+  })
+
+  it('forwards an automated reopen without presenting it as a user request', () => {
+    const callback = vi.fn()
+    const fake = makeFakeApp(true)
+    acquireSingleInstanceLock(fake.app, callback)
+    fake.listeners['second-instance']?.[0]({}, ['/Orca'], '/', { backgroundLaunch: true })
+    expect(callback).toHaveBeenCalledWith(['/Orca'], { backgroundLaunch: true })
   })
 })
 

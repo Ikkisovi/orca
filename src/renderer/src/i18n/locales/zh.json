@@ -4365,6 +4365,32 @@
           "title": "每日用量",
           "description": "所选主机及日期范围的每日 token 总量 · UTC",
           "empty": "所选日期范围暂无已采集用量。"
+        },
+        "HostUsageDetails": {
+          "models": "模型排行",
+          "projects": "项目排行",
+          "sessions": "独立会话",
+          "rankingScope": "按所选主机及日期范围内的 token 总量排行。",
+          "name": "名称",
+          "share": "占比",
+          "cost": "已知估算费用",
+          "empty": "所选范围暂无已采集用量。",
+          "previous": "上一页",
+          "next": "下一页",
+          "sessionScope": "按所选 UTC 日期筛选活跃会话。会话 token 为累计用量；上方排行为所选期间的用量。",
+          "search": "搜索会话、模型、客户端或项目",
+          "lastActive": "最近活动",
+          "firstActive": "首次活动",
+          "host": "主机",
+          "session": "会话",
+          "model": "模型",
+          "project": "项目",
+          "provider": "客户端",
+          "lifetimeTokens": "累计 token",
+          "noSessions": "所选条件下没有匹配的会话。",
+          "sessionDetails": "会话用量",
+          "metadataOnly": "累计用量与会话活动时间。",
+          "activity": "轮次 / 事件"
         }
       },
       "sparse": {

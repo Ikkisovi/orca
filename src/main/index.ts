@@ -1,7 +1,10 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
-import { isBackgroundLaunch } from './window/foreground-activation-policy'
+import {
+  isBackgroundLaunch,
+  restoreDesktopActivationForUserRequest
+} from './window/foreground-activation-policy'
 import {
   focusExistingWindow as focusExistingWindowAction,
   setMainWindowOpener
@@ -33,11 +36,20 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
 
 setMainWindowOpener(openMainWindow)
 
+let pendingUserDesktopActivation = false
+
 function focusExistingWindow(): void {
+  if (pendingUserDesktopActivation) {
+    restoreDesktopActivationForUserRequest()
+    pendingUserDesktopActivation = false
+  }
   focusExistingWindowAction()
 }
 
-function requestDesktopActivation(argv: readonly string[] = []): void {
+function requestDesktopActivation(
+  argv: readonly string[] = [],
+  launch?: { backgroundLaunch: boolean }
+): void {
   state.skillShareDeepLinks.capture(argv, (shareId) => {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
@@ -45,6 +57,12 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
   // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
     return
+  }
+  if (
+    launch?.backgroundLaunch === false ||
+    (launch === undefined && state.desktopActivationGate?.getState() === 'ready')
+  ) {
+    pendingUserDesktopActivation = true
   }
   state.desktopActivationGate?.requestActivation()
 }
