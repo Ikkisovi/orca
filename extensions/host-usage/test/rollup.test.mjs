@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { rollup, reconcileSnapshot } from '../src/rollup.mjs'
+import { rollup, reconcileSnapshot, normalizeModelName } from '../src/rollup.mjs'
 
 const row = (day, total, extra = {}) => ({
   day,
@@ -67,6 +67,70 @@ test('range, project, provider and host filters apply independently', () => {
   )
   assert.equal(rollup(hosts, { provider: 'pi' }).summary.total, 0)
   assert.equal(rollup(hosts, { host: 'remote' }).summary.total, 0)
+})
+test('Venus model names combine routes, clients and hosts with conserved token and cost totals', () => {
+  const mac = snapshot('mac', [
+    row('2026-10-12', 100, { model: 'gpt-6-astra', cost: 1 }),
+    row('2026-10-12', 75, { model: 'gpt-6-sol', cost: 0.5 })
+  ])
+  const venus = snapshot('venus', [
+    row('2026-10-12', 200, { model: 'openai/gpt-6-astra', cost: 2 })
+  ])
+  mac.providers.push({
+    provider: 'pi',
+    daily: [row('2026-10-12', 50, { provider: 'pi', model: 'openai-codex/gpt-6-astra' })],
+    sessions: [
+      { ...mac.providers[0].sessions[0], provider: 'pi', model: 'openai-codex/gpt-6-astra' }
+    ]
+  })
+  venus.providers.push({
+    provider: 'dsh',
+    daily: [
+      row('2026-10-12', 20, { provider: 'dsh', model: 'proxy/openai/gpt-6-astra', cost: 0.3 })
+    ],
+    sessions: []
+  })
+  const hosts = [
+    { key: 'local', snapshot: mac },
+    { key: 'venus', snapshot: venus },
+    { key: 'venus-alias', snapshot: venus }
+  ]
+  const result = rollup(hosts)
+  assert.deepEqual(
+    result.models.map(({ key, total }) => [key, total]),
+    [
+      ['gpt-6-astra', 370],
+      ['gpt-6-sol', 75]
+    ]
+  )
+  const combined = result.models[0]
+  assert.equal(combined.input, 330)
+  assert.equal(combined.output, 40)
+  assert.equal(combined.cached, 80)
+  assert.equal(combined.reasoning, 20)
+  assert.equal(combined.turns, 4)
+  assert.equal(combined.knownCost, 3.3)
+  assert.equal(combined.unknownCostRows, 1)
+  assert.equal(
+    result.models.reduce((sum, model) => sum + model.total, 0),
+    result.summary.total
+  )
+  assert.equal(result.providers.length, 3)
+  assert.equal(
+    result.recent.find((session) => session.provider === 'pi').model,
+    'openai-codex/gpt-6-astra'
+  )
+  assert.equal(rollup(hosts, { provider: 'pi' }).models[0].total, 50)
+  assert.equal(rollup(hosts, { host: 'venus' }).models[0].total, 220)
+})
+test('model naming combines missing names and retains distinct versions and tiers', () => {
+  for (const raw of [null, undefined, '', 'Unknown', ' unknown ', 'null', 'route/unknown']) {
+    assert.equal(normalizeModelName(raw), 'Unknown model')
+  }
+  assert.equal(normalizeModelName(' openai/gpt-6-sol '), 'gpt-6-sol')
+  assert.equal(normalizeModelName('anthropic/claude-opus-4-6'), 'claude-opus-4-6')
+  assert.equal(normalizeModelName('anthropic/claude-opus-4-8'), 'claude-opus-4-8')
+  assert.equal(normalizeModelName('openai/gpt-6-astra-high'), 'gpt-6-astra-high')
 })
 test('failed provider refresh retains last-good data and timestamps', () => {
   const old = snapshot('venus', [row('2026-10-12', 100)])

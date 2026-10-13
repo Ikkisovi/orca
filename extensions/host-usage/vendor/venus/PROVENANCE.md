@@ -9,4 +9,6 @@ Original SHA-256:
 
 The source package declares MIT and identifies its author as Ikkisovi. It was a customized Orca Pi/DSH analytics plugin. The fork retains reference modules alongside the scanner modules used by the build.
 
+Model ranking naming follows `scripts/patch-orca-core.js`, read on Venus on 2026-10-12: `normalizeModelName` and `OverviewModelRankingSection` remove the prefix through the last `/` and aggregate the model across harnesses. The host-usage rollup applies the same grouping across selected hosts, with blank, null and unknown names combined as `Unknown model`.
+
 Changes to the scanner copy: validate Zstandard frame headers before invoking `zstdcat` with a literal argv array; report discovery, file-read and decompression errors rather than silently turning them into empty usage; when an explicit total is missing, include input, output and both cache buckets without adding reasoning again. The collector sets UTC before scanning and writes caches to its own directory. Original pricing is retained as reference code; Pi/DSH cost estimates are not displayed as known prices.

@@ -3,7 +3,7 @@
   "publisher": "ikkisovi",
   "id": "host-usage",
   "name": "Kai's usage — local & remote",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Scan and monitor Codex, Claude, OpenCode, Pi and DSH logs across the local machine and Orca SSH hosts. Uses a trusted Node worker and existing SSH credentials. Usage metadata stays on your machines.",
   "engines": {
     "orca": ">=1.4.221"

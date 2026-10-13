@@ -9,6 +9,15 @@ const empty = () => ({
   knownCost: 0,
   unknownCostRows: 0
 })
+export function normalizeModelName(raw) {
+  // Match the Venus overview: route prefixes and clients do not identify a model.
+  const name = String(raw ?? '')
+    .trim()
+    .split('/')
+    .at(-1)
+    .trim()
+  return !name || /^(null|unknown)$/i.test(name) ? 'Unknown model' : name
+}
 function add(target, row) {
   for (const key of ['total', 'input', 'output', 'cached', 'cacheWrite', 'reasoning', 'turns']) {
     target[key] += row[key] || 0
@@ -83,7 +92,7 @@ export function rollup(
     add(summary, row)
     for (const [map, key] of [
       [days, row.day],
-      [models, `${row.provider} / ${row.model}`],
+      [models, normalizeModelName(row.model)],
       [projects, row.project],
       [providers, row.provider]
     ]) {

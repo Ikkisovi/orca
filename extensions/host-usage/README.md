@@ -4,6 +4,8 @@ An Orca extension for local and remote agent usage. The dashboard opens in Orca'
 
 This fork also integrates the plugin into **Settings → Stats & Usage**. Its default **Local & remote usage** view lists every discovered host, host/date selection, token and session totals, daily charts, model/project rankings, searchable paginated sessions, provider totals, last successful collection times, and scan errors. The original local provider views remain available in the same provider menu. This native integration requires the fork desktop build; installing the plugin alone on stock Orca does not change its Stats page.
 
+Model rankings follow the customized Venus overview: remove routing prefixes through the last `/`, then combine each model across clients and selected hosts. Token buckets and known costs are summed, with missing costs retained as partial estimates. Client totals and individual sessions retain their original identities.
+
 It scans Codex, Claude, OpenCode, Pi and DSH logs on the local machine and saved SSH hosts. Saved paired environments are linked to matching SSH connections. Hosts that only have a pairing connection show **needs SSH** until an SSH alias is added. Multiple aliases for a machine are combined using the SSH destination and the collector's machine/user identity.
 
 ## Use
